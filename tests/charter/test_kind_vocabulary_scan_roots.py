@@ -199,7 +199,13 @@ class TestOrgScanDirsHelper:
         ]
 
     def test_neither_dir_present_returns_empty_list(self, tmp_path: Path) -> None:
-        """Neither present: neither directory exists -> ``[]``, no exception."""
+        """Neither present: neither directory exists -> ``[]``, no exception.
+
+        Non-discriminating boundary case (identical under the pre-fix and
+        post-fix implementations, since ``is_dir()`` is ``False`` for every
+        candidate either way) -- included for FR-003's explicit enumeration
+        completeness, not as fix-specific regression coverage.
+        """
         assert _org_scan_dirs(ArtifactKind.TACTIC, [tmp_path / "nonexistent-root"]) == []
 
     def test_same_config_stem_precedence_flat_wins(self, tmp_path: Path) -> None:

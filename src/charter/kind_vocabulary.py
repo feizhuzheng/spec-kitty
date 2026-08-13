@@ -160,8 +160,15 @@ def _scan_roots(
     pack uses today, matching the live loader's own non-recursive org glob
     (``DoctrineService._org_dirs`` / ``BaseDoctrineRepository``) -- plus,
     additively, the legacy package-shaped ``<root>/<plural>/built-in``
-    layout (``recursive=True``) where that also still exists, kept only for
-    backward compatibility. ``layer_roots`` is the modern charter layer map.
+    layout (``recursive=True``) where that also separately exists. That
+    legacy shape is accepted here for config-stem *resolution* only; the
+    live loader (``DoctrineService``/``BaseDoctrineRepository``) has never
+    read an org pack's nested ``built-in/`` subdirectory -- its org-layer
+    scan is always the flat, non-recursive glob (``base.py``'s
+    ``_project_scan``, reused for both org and project layers). A
+    config-stem that resolves only via the legacy entry therefore does not
+    guarantee the artifact's *content* loads at runtime through
+    ``DoctrineService``. ``layer_roots`` is the modern charter layer map.
     Org roots contribute ``<root>/doctrine/<plural>/org``. Project roots
     contribute ``<root>/doctrine/<singular>`` for live ``.kittify/doctrine``
     overlays.
@@ -211,10 +218,23 @@ def _org_scan_dirs(
     ``BaseDoctrineRepository``) when it exists, then the legacy
     ``<root>/<plural>/built-in`` layout (``recursive=True``, unchanged)
     when it separately exists. Neither directory existing is not an error --
-    fewer entries are returned, never a raise. The flat entry is ordered
-    first so :func:`resolve_artifact_urn`'s first-match-wins semantics make
-    the flat file win a same-config-stem collision between the two
-    directories (FR-001's precedence rule).
+    fewer entries are returned, never a raise. Note that the live loader
+    (``DoctrineService``/``BaseDoctrineRepository``) has never read the
+    legacy nested shape -- see :func:`_scan_roots`'s docstring.
+
+    The flat entry is ordered first *within each root* so
+    :func:`resolve_artifact_urn`'s first-match-wins semantics make the flat
+    file win a same-config-stem collision between the two directories of
+    one org root (FR-001's precedence rule, spec.md Acceptance Scenario 4,
+    scoped to "for one org root"). This ordering guarantee does **not**
+    extend across multiple org roots: with ``org_roots=[a, b]``, a legacy
+    entry from ``a`` still precedes a flat entry from ``b`` in the returned
+    list, so a same-config-stem collision straddling two different org
+    packs is decided by ``org_roots`` order, not by flat-vs-legacy shape.
+    Reconciling cross-root precedence is a separate, broader question (the
+    same ``org_roots``-order-dependence already exists for any same-stem
+    collision across roots, e.g. two flat-layout packs) and is out of this
+    fix's bounded scope (spec.md C-001).
     """
     dirs: list[tuple[Path, bool]] = []
     for root in org_roots or []:
