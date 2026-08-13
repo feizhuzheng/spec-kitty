@@ -354,3 +354,66 @@ existed). No content of `_rnd/` was read, cited, or altered.
 **Result**: `analysis-report.md` persisted with `verdict: ready`, `issue_counts` all zero,
 `findings: []` — the required exact verdict string, achieved without a fix round (4b was not
 needed; nothing to fix).
+
+## Implement phase, WP01 (2026-08-13/14)
+
+**`safe-commit --to-branch` worked cleanly, no landmine reproduced.** All four implementation
+commits (`dcc4f0c57` red-first test, `c88dd78dd` fix, `7ac9b2fa0` docstring correction,
+`d6a297409` architectural-ratchet line-pin refresh) landed via
+`spec-kitty safe-commit <files> -m "..." --to-branch pr/org-activation-scan-dirs` on the first
+try each time, with `_rnd/` left in place untouched — the documented `mv _rnd/` workaround was
+never needed for `safe-commit` itself (only `record-analysis`, per the specify-phase entry
+above, apparently scopes its dirty-worktree guard more broadly than `safe-commit` does). Worth
+noting as a positive data point: not every command in this mission's CLI surface shares the same
+dirty-worktree guard scope.
+
+**Not a spec-kitty defect, but a real process-discovery worth recording: a reviewer subagent was
+already running concurrently, in this same shared (non-worktree) checkout, before this WP's own
+implementer reported done.** Mid-implementation, `git status` unexpectedly showed
+`kitty-specs/org-activation-scan-dirs-01KZY1PT/tasks/WP01-org-scan-dirs-flat-layout-fix.md`
+modified (an appended `## Activity Log` entry) and four new files under
+`kitty-specs/org-activation-scan-dirs-01KZY1PT/reviews/` (`pr.boundary.findings.yaml`,
+`pr.contract.findings.yaml`, `pr.tests.findings.yaml`, `pr.merged.yaml`) that this implementer
+never wrote. `ps aux` and `git log` (interleaved `chore(spec-kitty): status transition WP01` /
+`docs(WP01): record issue-matrix verdicts` commits from a different git author) confirmed an
+independent process was reading this WP's already-landed commits (`dcc4f0c57`, `c88dd78dd`) and
+running a full pre-merge review pass against them in real time, in the same checkout — expected
+under this mission's `single_branch` topology (no lane worktree isolates the two roles), but
+worth flagging because it means an implementer here cannot assume the working tree is exclusively
+theirs between commits, only between `safe-commit` calls. Three of the reviewer's four findings
+were real, independently re-verified (empirically, not just by re-reading the reviewer's
+evidence) and acted on in this same pass — see `pr.merged.yaml` for the full record:
+`PR-BOUNDARY-001` (a docstring's "kept only for backward compatibility" framing was factually
+wrong — the live loader never read that shape, verified against `doctrine/base.py` /
+`doctrine/service.py` directly), `PR-TESTS-001` (one FR-003 test case is non-discriminating
+under a function-body revert — true, now noted in its docstring), and, most importantly,
+`PR-CONTRACT-001` (severity 4): the fix moved the `_org_scan_dirs` "built-in" filesystem join
+from line 206 to line 244, and `tests/architectural/test_built_in_location_authority.py`'s
+`_KNOWN_JOIN_ALLOWLIST` pins that join by exact `(file, lineno)` — so this WP's own fix, left
+as originally written, would have landed a **real, verified-failing** architectural CI gate
+regression (`test_no_builtin_path_joins_outside_pack_paths_authority`, reproduced red locally
+before the allowlist-line fix and green after). Neither `spec.md` nor `plan.md` nor this WP's own
+task file mentioned `tests/architectural/test_built_in_location_authority.py` anywhere in their
+Gate Set tables — a real gap in this mission's own pre-implementation planning pass, not a
+tooling defect, but recorded here so a future mission's planning phase greps
+`tests/architectural/*_allowlist*` / `_KNOWN_*_ALLOWLIST` style line-pinned ratchets for any
+file it is about to move code within, not just the gate-set table it already enumerated. Fixed
+in commit `d6a297409`, one file outside this WP's `owned_files` — justified in the commit message
+and this WP's final report rather than silently expanded into scope.
+
+**Self-inflicted near-miss, not a tooling defect: `git stash` on a shared (non-worktree)
+checkout is genuinely risky and should not have been reached for.** To rule out the
+architectural-ratchet failure being pre-existing on `origin/main` (Standing Order #4's
+attribute-before-you-fix discipline), this implementer ran `git stash` intending to test against
+a clean tree — but `git stash` (no `--` pathspec) stashed *all* locally modified files, including
+the reviewer's own in-flight, uncommitted `WP01-org-scan-dirs-flat-layout-fix.md` Activity Log
+edit, which this implementer does not own and had no business touching. The stash was popped
+back immediately (`git stash pop`) and `git diff` on that file was confirmed byte-identical
+before and after — no content was lost — but the pre-existing-vs-introduced question was in fact
+answerable by reasoning alone (the allowlist is exact-line-pinned; `origin/main`'s
+`kind_vocabulary.py` has the join at line 206 matching the allowlist's own line-206 entry, so the
+gate necessarily passes there by construction) without touching git state at all. Recorded as a
+process lesson for future single_branch/no-worktree implementers: reasoning from the allowlist's
+own invariant, or a read-only `git show origin/main:<path> | grep -n`, answers "is this
+pre-existing" without any stash/checkout/reset operation that could collide with a concurrently
+running reviewer's own uncommitted state in the same tree.
