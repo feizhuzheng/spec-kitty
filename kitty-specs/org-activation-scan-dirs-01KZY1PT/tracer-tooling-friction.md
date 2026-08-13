@@ -54,3 +54,21 @@ but are **uncommitted** as of this entry. The mission is BLOCKED pending operato
 (configure a git identity for this checkout; optionally also confirm the desired topology
 for redo, since `single_branch` cannot be changed post-scaffold and the existing mission
 directory should not be scaffolded a second time per RESUME discipline).
+
+## Resolution (2026-08-13, same day, operator unblocked both)
+
+Operator configured a global git identity (`MOES-Media` /
+`34285209+MOES-Media@users.noreply.github.com` — confirmed via `git config user.email` before
+retrying) and ratified the `pr/org-activation-scan-dirs` branch (created earlier during
+diagnosis, same SHA as `main`, no divergence) as the working branch for this mission, per the
+charter's own Agent Push Authorization remedy for protected-branch refusals — the same
+adjudication already made for the sibling `org-pack-drg-root-graph-guard` mission. The
+`single_branch` topology scaffold was kept as-is (no re-scaffold).
+
+With HEAD on `pr/org-activation-scan-dirs` (not `main`) and identity configured,
+`spec-kitty safe-commit kitty-specs/org-activation-scan-dirs-01KZY1PT --to-branch
+pr/org-activation-scan-dirs --message "..." --json` **succeeded on the first try** —
+no fallback to plain `git commit` was needed. Commit `8902a7453`. This confirms both
+blockers (SK-09's protected-branch-on-`main` refusal, SK-11's missing identity) were the
+full and only cause; once off `main` and with identity present, `safe_commit` behaves
+exactly as documented.
