@@ -34,10 +34,13 @@ progress in parallel. This mission is **#3385 only**.
 - Q: `_built_in_scan_dir` and `_layer_scan_dirs` sit in the same file as `_org_scan_dirs` and
   are similarly terse — should the mission clean them up while it's in the file (Boy Scout
   Rule, `DIRECTIVE_025`)? → A: **No.** Per `RECONCILE_CHANGE_SCOPE_TENSIONS`
-  (`.kittify/charter/charter.md`), smallest-viable-diff picks the file set first for this
-  change: `src/charter/kind_vocabulary.py` (the ~5 LOC fix) plus its test files. Those two
-  neighboring functions are not broken; touching them grows the file set beyond the stated
-  goal and is deferred, not silently folded in.
+  (`.kittify/charter/charter.md`), step 3 — Locality of Change — is what governs here: edits
+  stay close to the specific problem, and `_built_in_scan_dir`/`_layer_scan_dirs` are not
+  broken and are not the cited defect (`_org_scan_dirs` is). Both functions already sit in the
+  one file smallest-viable-diff selects for this change (`src/charter/kind_vocabulary.py`), so
+  touching them would not grow the file set at all — the reason to leave them alone is that
+  they are not the problem this mission exists to fix, not that editing them would expand
+  scope. Deferred, not silently folded in.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -119,29 +122,44 @@ testing and guaranteed once a project does the documented thing.
 
 As an operator who has installed an org doctrine pack in the documented flat layout
 (`<org_root>/directives/…`, no `built-in/` segment) and who runs `charter activate directive
-<any-stem>` for one built-in directive, I want my org pack's directives — and every other
-activatable kind — to still be present in the filtered DRG afterward. The **observable, loud**
-signal of success is structural: the org artifact's URN is a member of the resolved-URN set
-returned by `_resolve_activated_urns_by_kind`, and the corresponding node survives
-`_node_is_activated`'s step-3 gate and appears in `filter_graph_by_activation`'s output graph.
-This replaces today's silent, unobservable drop with a positive, checkable fact — not a
-warning bolted onto the old behavior, but the artifact genuinely being found.
+<org-directive-stem>` for one of my own org directives, I want that directive to actually
+resolve and survive activation filtering — not silently vanish because `_org_scan_dirs` never
+looked in the directory it actually lives in. The **observable, loud** signal of success is
+structural: the org artifact's URN is a member of the resolved-URN set returned by
+`_resolve_activated_urns_by_kind`, and the corresponding node survives `_node_is_activated`'s
+step-3 gate and appears in `filter_graph_by_activation`'s output graph. This replaces today's
+silent failure (`resolve_artifact_urn` raising `UnknownArtifactIdError`, swallowed by
+`_resolve_activated_urns_for_kind`) with a positive, checkable fact — not a warning bolted onto
+the old behavior, but the artifact genuinely being found. This holds regardless of what else is
+or isn't activated alongside it (Acceptance Scenario 5) — but activating something other than
+the org stem itself cannot surface it; the per-artifact-ID gate is selective by design, not
+something this mission changes.
 
-**Why this priority**: this is the whole defect. Every project with an org pack that activates
-even one artifact hits it today.
+**Why this priority**: this is the whole defect. Every project with an org pack that tries to
+activate one of its own org-pack artifacts by stem hits this today — the artifact can never
+resolve via `_org_scan_dirs`, so it silently fails to survive activation filtering, with no
+error surfaced to the operator.
 
-**Independent Test**: build a fixture org pack in the flat layout, register it as an org root,
-call `charter activate directive <built-in-stem>` (or the equivalent programmatic
-`plan_activation`/`commit_activation` call), then assert the org pack's own directive URN is
-present in `filter_graph_by_activation`'s output graph.
+**Independent Test**: build a fixture org pack in the flat layout — including a root-level
+`*.graph.yaml` declaring the org directive as a DRG node (fixture-construction detail per
+FR-002/FR-003; test data only, not a change to `_drg_helpers.py`, consistent with C-002) —
+register it as an org root, call `charter activate directive <org-directive-stem>` for the org
+directive's own config-stem (or the equivalent programmatic `plan_activation`/`commit_activation`
+call), then assert the org pack's own directive URN is present in
+`filter_graph_by_activation`'s output graph.
 
 **Acceptance Scenarios**:
 
 1. **Given** an org root containing `<org_root>/directives/<org-directive>.directive.yaml`
-   (flat layout, no `built-in/` segment) and no other activation state, **When**
-   `charter activate directive <built-in-stem>` runs for an unrelated built-in directive,
-   **Then** the org directive's node is present in the graph returned by
-   `filter_graph_by_activation`.
+   (flat layout, no `built-in/` segment) **and** a root-level `<org_root>/<org-directive>.graph.yaml`
+   declaring the org directive as a DRG node (fixture-construction detail — test data only, not a
+   change to `_drg_helpers.py`; `filter_graph_by_activation` only ever operates on nodes already
+   in the merged graph, and DRG nodes come from `*.graph.yaml` fragments, never synthesized from
+   `*.directive.yaml` artifact files) and no other activation state, **When**
+   `charter activate directive <org-directive-stem>` runs for the org directive's own
+   config-stem — the full `activate()` → `filter_graph_by_activation()` round trip, not a direct
+   `resolve_artifact_urn` call — **Then** the org directive's node is present in the graph
+   returned by `filter_graph_by_activation`.
 2. **Given** the same org root, **When** `resolve_artifact_urn(ArtifactKind.DIRECTIVE,
    <org-directive-stem>, doctrine_root=doctrine_root, org_roots=[org_root])` is called directly,
    **Then** it returns the org directive's URN instead of raising `UnknownArtifactIdError`.
@@ -150,6 +168,22 @@ present in `filter_graph_by_activation`'s output graph.
    activation runs, **Then** artifacts under **both** the flat directory and the legacy
    `built-in/` subdirectory are found — the fix is additive (the old scan location keeps
    working), not a replacement that trades one phantom layout for a different single layout.
+4. **Given** an org root containing a same-config-stem artifact file under both
+   `<org_root>/directives/<stem>.directive.yaml` (flat, `id: DIRECTIVE_FLAT`) and the legacy
+   `<org_root>/directives/built-in/<stem>.directive.yaml` (`id: DIRECTIVE_LEGACY`), **When**
+   `resolve_artifact_urn(ArtifactKind.DIRECTIVE, <stem>, doctrine_root=doctrine_root,
+   org_roots=[org_root])` is called, **Then** it returns `directive:DIRECTIVE_FLAT` — the
+   flat-layout file's URN — per FR-001's precedence rule, never the legacy file's URN and never a
+   result that depends on incidental scan order.
+5. **Given** the org root from Scenario 1 (flat-layout org directive plus the root-level
+   `*.graph.yaml` DRG-node fixture), **When** `charter activate directive <org-directive-stem>`
+   and `charter activate directive <unrelated-built-in-stem>` both run, in either order, **Then**
+   the org directive's node is present in `filter_graph_by_activation`'s output in both
+   orderings — its presence follows from its own stem being a member of the activated set, not
+   from what else is activated or in which order. Activating **only** the unrelated built-in
+   stem, without ever activating the org stem itself, does **not** surface the org node — the
+   per-artifact-ID gate in `_node_is_activated` step 3 (`src/charter/drg.py:467-473`) is
+   selective by design, not a defect this mission changes.
 
 ### User Story 2 - The regression test is red before the fix and green after (Priority: P1)
 
@@ -241,6 +275,11 @@ the follow-up check has a fixed target):
 - **No opportunistic cleanup of `_built_in_scan_dir` / `_layer_scan_dirs`.** Both sit in
   `src/charter/kind_vocabulary.py` next to `_org_scan_dirs` and are not touched — see
   Clarifications, `RECONCILE_CHANGE_SCOPE_TENSIONS`.
+- **Same-config-stem file present in both the flat and legacy directories.** Per FR-001's
+  precedence rule, the flat-layout file wins (Acceptance Scenario 4) — a deliberate, documented
+  choice, not an accident of `_scan_roots`'s list order. Surfacing a collision warning (mirroring
+  the `DoctrineLayerCollisionWarning` pattern, `src/doctrine/base.py:46,202`) is not required by
+  this mission; silently preferring flat is sufficient to close the ambiguity this raises.
 
 ## Requirements *(mandatory)*
 
@@ -248,11 +287,25 @@ the follow-up check has a fixed target):
 
 | ID | Title | User Story | Priority | Status |
 | --- | --- | --- | --- | --- |
-| FR-001 | `_org_scan_dirs` scans both the flat and legacy org layouts | `_org_scan_dirs` (`src/charter/kind_vocabulary.py:200-209`) returns a scan entry for `<root>/<plural>` (flat, `recursive=False`, matching `DoctrineService._org_dirs` / `BaseDoctrineRepository`'s non-recursive org glob) **and**, where it separately exists on disk, `<root>/<plural>/built-in` (`recursive=True`, unchanged from today), for every configured org root. Neither directory existing is not an error — the function returns fewer entries, never raises. | User Story 1 | High | Open |
-| FR-002 | Red-first regression test at the activation-filter level | A new pytest regression test proves an org-pack artifact (flat layout) is present in `filter_graph_by_activation`'s output after `charter activate <kind> <stem>` activates one *unrelated* built-in artifact. The test is authored to fail against the pre-fix `_org_scan_dirs` body and to pass against the post-fix body (both runs recorded by the implementing WP). | User Story 2 | High | Open |
-| FR-003 | Existing unit-level `_org_scan_dirs` tests updated for the new contract | `TestOrgScanDirsHelper` in `tests/charter/test_kind_vocabulary_scan_roots.py` (currently `test_none_org_roots_returns_empty_list`, `test_missing_org_built_in_dir_skipped`, `test_existing_org_built_in_dir_returned` — the last of which today pins the **old**, phantom-layout-only behavior) is extended to cover: only the flat dir present, only the legacy `built-in/` dir present, both present (both returned), and neither present (empty list) — without deleting the pre-existing legacy-shape coverage. | User Story 1 | High | Open |
-| FR-004 *(contingent on #3384, verification-only, not authored by this mission)* | Named-diagnostic check for the D1 collapse path | Once issue #3384's fix lands, verify whether the collapse-to-empty-bundle path at `src/charter/action_doctrine_bundle.py:152-156` surfaces a named diagnostic (not a bare `logging.WARNING`) when an org pack has no root-level `*.graph.yaml`. This mission records the finding; it does not implement a change to make it true. | User Story 3 | Low | Open |
-| FR-005 *(contingent on #3384, verification-only, not authored by this mission)* | `<org_root>/drg` alternative-location check | Once issue #3384's fix lands, verify whether DRG fragments placed at `<org_root>/drg/*.graph.yaml` (a location `_RECOGNISED_ARTIFACT_DIRS` already names, `src/specify_cli/doctrine/snapshot.py:38-50`) are read as an alternative to `<org_root>/*.graph.yaml`. Pre-fix evidence (read-only, `src/doctrine/drg/loader.py:81-107`): they currently are not, because `load_graph_or_dir`'s glob is non-recursive at the given path. This mission records the finding; it does not implement a change to make it true. | User Story 3 | Low | Open |
+| FR-001 | `_org_scan_dirs` scans both the flat and legacy org layouts | `_org_scan_dirs` (`src/charter/kind_vocabulary.py:200-209`) returns a scan entry for `<root>/<plural>` (flat, `recursive=False`, matching `DoctrineService._org_dirs` / `BaseDoctrineRepository`'s non-recursive org glob) **and**, where it separately exists on disk, `<root>/<plural>/built-in` (`recursive=True`, unchanged from today), for every configured org root, with the flat entry ordered before the legacy entry in the returned list. Neither directory existing is not an error — the function returns fewer entries, never raises. **Precedence rule**: when a same-config-stem artifact file exists under both `<root>/<plural>` and `<root>/<plural>/built-in` for one org root, the flat-layout file wins — `resolve_artifact_urn` (`:253+`) is first-match-wins over `_scan_roots`'s output, so ordering the flat entry first makes this a deliberate, documented choice (flat is the canonical/current layout; legacy is kept only for backward compatibility) rather than an accidental list-order artifact. See Acceptance Scenario 4. | User Story 1 | High | Open |
+| FR-002 | Red-first regression test at the activation-filter level | A new pytest regression test proves an org-pack artifact (flat layout) is present in `filter_graph_by_activation`'s output after `charter activate directive <org-directive-stem>` activates the org artifact's **own** config-stem (the full `activate()` → `filter_graph_by_activation()` round trip, not a direct `resolve_artifact_urn()` call). The fixture must also declare the org directive as a DRG node in a root-level `*.graph.yaml` — test-fixture data only, not a change to `_drg_helpers.py` (C-002) — since `filter_graph_by_activation` only ever operates on nodes already present in the merged graph, and DRG nodes come from `*.graph.yaml` fragments, never synthesized from `*.directive.yaml` files. The test is authored to fail against the pre-fix `_org_scan_dirs` body and to pass against the post-fix body (both runs recorded by the implementing WP). | User Story 2 | High | Open |
+| FR-003 | Existing unit-level `_org_scan_dirs` tests updated for the new contract | `TestOrgScanDirsHelper` in `tests/charter/test_kind_vocabulary_scan_roots.py` (currently `test_none_org_roots_returns_empty_list`, `test_missing_org_built_in_dir_skipped`, `test_existing_org_built_in_dir_returned` — the last of which today pins the **old**, phantom-layout-only behavior) is extended to cover: only the flat dir present, only the legacy `built-in/` dir present, both present (both returned), neither present (empty list), and a same-config-stem file present under both directories asserting `resolve_artifact_urn` returns the flat-layout file's URN (FR-001's precedence rule) — without deleting the pre-existing legacy-shape coverage. This is unit-level coverage of `_org_scan_dirs`/`resolve_artifact_urn`; unlike FR-002's activation-filter-level test, it needs no DRG-graph (`*.graph.yaml`) fixture. | User Story 1 | High | Open |
+
+### Contingent Verification Criteria
+
+These are deliberately **not** `FR-NNN` functional requirements — they are recorded as `VC-NNN`
+("verification criteria") so that `parse_requirement_ids_from_spec_md`
+(`src/specify_cli/requirement_mapping.py:104-117`, regex `\b(?:FR|NFR|C)-\d+\b`) does not treat
+them as functional-requirement IDs a work package must claim via `requirement_refs`. Both are
+contingent on issue #3384 landing (a sibling mission's fix, out of scope here — see
+Clarifications) and verification-only: this mission records the finding, it does not implement a
+change to make either true, and neither gates `mission finalize-tasks` or this mission's own
+completion (SC-005).
+
+| ID | Title | Verification Criterion | User Story | Priority | Status |
+| --- | --- | --- | --- | --- | --- |
+| VC-001 | Named-diagnostic check for the D1 collapse path | Once issue #3384's fix lands, verify whether the collapse-to-empty-bundle path at `src/charter/action_doctrine_bundle.py:152-156` surfaces a named diagnostic (not a bare `logging.WARNING`) when an org pack has no root-level `*.graph.yaml`. This mission records the finding; it does not implement a change to make it true. | User Story 3 | Low | Open |
+| VC-002 | `<org_root>/drg` alternative-location check | Once issue #3384's fix lands, verify whether DRG fragments placed at `<org_root>/drg/*.graph.yaml` (a location `_RECOGNISED_ARTIFACT_DIRS` already names, `src/specify_cli/doctrine/snapshot.py:38-50`) are read as an alternative to `<org_root>/*.graph.yaml`. Pre-fix evidence (read-only, `src/doctrine/drg/loader.py:81-107`): they currently are not, because `load_graph_or_dir`'s glob is non-recursive at the given path. This mission records the finding; it does not implement a change to make it true. | User Story 3 | Low | Open |
 
 ### Constraints
 
@@ -292,20 +345,23 @@ the follow-up check has a fixed target):
 - **SC-001**: The FR-002 regression test, run against the `planning_base_branch` commit
   (`main` @ `ab0a0b9b5` or later unfixed state), fails; run against the mission head with the
   FR-001 fix applied, passes. Both runs are recorded.
-- **SC-002**: `charter activate directive <any-built-in-stem>` (or the programmatic
-  `plan_activation`/`commit_activation` equivalent), run against a fixture project with a
-  flat-layout org pack registered as an org root, leaves at least one org-pack directive node
-  present in `filter_graph_by_activation`'s output graph — the loud, positive, checkable
-  success signal named in User Story 1.
-- **SC-003**: `TestOrgScanDirsHelper` (FR-003) covers flat-only, legacy-only, both-present, and
-  neither-present cases and is green; the pre-existing `test_existing_org_built_in_dir_returned`
-  case (legacy shape) still passes unmodified in behavior (still returns the legacy dir), only
-  its assertion about what else is returned may change if a flat dir is also present in that
-  fixture.
+- **SC-002**: `charter activate directive <org-directive-stem>` — the org directive's **own**
+  config-stem — (or the programmatic `plan_activation`/`commit_activation` equivalent), run
+  against a fixture project with a flat-layout org pack (including a root-level `*.graph.yaml`
+  declaring the org directive as a DRG node) registered as an org root, leaves that org-pack
+  directive node present in `filter_graph_by_activation`'s output graph — the loud, positive,
+  checkable success signal named in User Story 1. This holds regardless of what else is
+  activated alongside it (Acceptance Scenario 5); it does **not** hold when only an unrelated
+  artifact is activated and the org stem itself never is.
+- **SC-003**: `TestOrgScanDirsHelper` (FR-003) covers flat-only, legacy-only, both-present,
+  neither-present, and same-config-stem-in-both-directories (precedence) cases and is green; the
+  pre-existing `test_existing_org_built_in_dir_returned` case (legacy shape) still passes
+  unmodified in behavior (still returns the legacy dir), only its assertion about what else is
+  returned may change if a flat dir is also present in that fixture.
 - **SC-004**: `ruff check` and `mypy --strict` are clean on `src/charter/kind_vocabulary.py` and
   every touched test file, with no new suppressions.
 - **SC-005** *(contingent, tracked for a later pass, not gating this mission's completion)*: once
-  #3384 merges, FR-004 and FR-005's findings are recorded (as a follow-up note, issue comment, or
+  #3384 merges, VC-001 and VC-002's findings are recorded (as a follow-up note, issue comment, or
   successor mission input) rather than lost.
 
 ## Out of Scope
