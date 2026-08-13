@@ -115,14 +115,20 @@ no real org pack uses. Three independent sources agree the real layout is **flat
 succeed — `resolve_artifact_urn` cannot find it via `_org_scan_dirs`, so it can never survive
 `_node_is_activated`'s step-3 filter, no matter what else is or isn't activated alongside it — no
 error, no warning, `charter activate` reports success while quietly failing to do the one thing
-the operator asked for. (Separately, and *not* fixed by this mission: activating some other,
-unrelated built-in or project artifact by stem can also evict an org-pack artifact that was never
-itself explicitly activated — `CharterPackManager.activate`'s FR-021 default-pack materialization
-(`src/charter/pack_manager.py:601-616`) draws from the STATIC shipped `default.yaml`
-(`src/charter/pack_manager.py:511-518`, `src/charter/packs/default.yaml`), which by construction
-can never list a third-party org artifact's ID, so that path evicts the org artifact regardless of
-`_org_scan_dirs`. This mission narrows the org pack's *own* stem to always resolve; it does not
-change that separate, pre-existing default-pack behavior — see Acceptance Scenario 5.) With the
+the operator asked for. (Relatedly, and *not a defect this mission changes*: activating some
+other, unrelated built-in or project artifact by stem also does not surface an org-pack artifact
+that was never itself explicitly activated — the per-artifact-ID gate in `_node_is_activated`
+step 3 (`src/charter/drg.py:467-473`) excludes ANY URN absent from the resolved-activation set
+once that set is armed (non-`None`), symmetrically for org, built-in, and project artifacts alike
+— it is not an org-specific gap in `default.yaml`'s enumeration. `CharterPackManager.activate`'s
+FR-021 default-pack materialization (`src/charter/pack_manager.py:601-616`,
+`plan_activation`'s `if current is None:` branch, `src/charter/activation_engine.py:257-268`)
+seeds an unset activation set from the STATIC shipped `default.yaml`
+(`src/charter/pack_manager.py:511-518`, `src/charter/packs/default.yaml`) rather than enumerating
+every artifact on disk — but the same exclusion would equally apply to an unlisted built-in or
+project artifact, not only to org ones. This mission makes the org pack's *own* stem always
+resolve when explicitly activated; it does not change the gate's general selectivity — see
+Acceptance Scenario 5.) With the
 `activated_*` key absent, the filter is default-allow
 (`_resolve_activated_urns_for_kind` returns `None` when `activated_ids is None`, `:359-360`) and
 the org artifact survives — which is why this is easy to miss in ad hoc testing and guaranteed
@@ -391,6 +397,10 @@ completion (SC-005).
   or to `_node_is_activated`'s gate logic (`src/charter/drg.py:409-475`) — both are cited as
   mechanism evidence, neither is modified; the defect is fully closed by making
   `_org_scan_dirs` find what is really on disk.
+- **The per-artifact-ID gate's general selectivity.** Excluding any artifact — org, built-in, or
+  project — that is not on an armed activation list is unchanged by this mission; it is a
+  by-design property of `_node_is_activated` step 3 (`src/charter/drg.py:467-473`), not a defect
+  being deferred — see Acceptance Scenario 5.
 
 ## Assumptions
 
