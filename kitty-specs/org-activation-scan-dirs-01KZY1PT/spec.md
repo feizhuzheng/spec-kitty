@@ -121,7 +121,7 @@ that was never itself explicitly activated — the per-artifact-ID gate in `_nod
 step 3 (`src/charter/drg.py:467-473`) excludes ANY URN absent from the resolved-activation set
 once that set is armed (non-`None`), symmetrically for org, built-in, and project artifacts alike
 — it is not an org-specific gap in `default.yaml`'s enumeration. `CharterPackManager.activate`'s
-FR-021 default-pack materialization (`src/charter/pack_manager.py:601-616`,
+default-pack materialization (`src/charter/pack_manager.py:601-616`,
 `plan_activation`'s `if current is None:` branch, `src/charter/activation_engine.py:257-268`)
 seeds an unset activation set from the STATIC shipped `default.yaml`
 (`src/charter/pack_manager.py:511-518`, `src/charter/packs/default.yaml`) rather than enumerating

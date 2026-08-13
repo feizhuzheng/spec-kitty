@@ -6,6 +6,8 @@ work_packages:
       - "src/charter/kind_vocabulary.py"
       - "tests/charter/test_kind_vocabulary_scan_roots.py"
       - "tests/charter/test_org_scan_dirs_activation_regression.py"
+    create_intent:
+      - "tests/charter/test_org_scan_dirs_activation_regression.py"
     requirement_refs:
       - FR-001
       - FR-002

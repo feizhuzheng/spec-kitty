@@ -1,12 +1,32 @@
 ---
-work_package_id: "WP01"
-title: "_org_scan_dirs flat-layout fix, red-first"
+work_package_id: WP01
+title: _org_scan_dirs flat-layout fix, red-first
 dependencies: []
-requirement_refs: ["FR-001", "FR-002", "FR-003"]
-subtasks: ["T001", "T002", "T003", "T004", "T005", "T006"]
-owned_files: ["src/charter/kind_vocabulary.py", "tests/charter/test_kind_vocabulary_scan_roots.py", "tests/charter/test_org_scan_dirs_activation_regression.py"]
-authoritative_surface: "src/charter/kind_vocabulary.py"
-execution_mode: "code_change"
+requirement_refs:
+- FR-001
+- FR-002
+- FR-003
+tracker_refs: []
+planning_base_branch: main
+merge_target_branch: main
+branch_strategy: Planning artifacts for this mission were generated on main. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into main unless the human explicitly redirects the landing branch.
+subtasks:
+- T001
+- T002
+- T003
+- T004
+- T005
+- T006
+history: []
+authoritative_surface: src/charter/kind_vocabulary.py
+create_intent:
+- tests/charter/test_org_scan_dirs_activation_regression.py
+execution_mode: code_change
+owned_files:
+- src/charter/kind_vocabulary.py
+- tests/charter/test_kind_vocabulary_scan_roots.py
+- tests/charter/test_org_scan_dirs_activation_regression.py
+tags: []
 ---
 
 ## Objective

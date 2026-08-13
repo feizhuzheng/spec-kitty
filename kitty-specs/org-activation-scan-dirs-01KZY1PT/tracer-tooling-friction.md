@@ -162,3 +162,102 @@ for the tasks phase as of this entry. The mission is BLOCKED pending an operator
 to handle the false-positive `FR-021` match (accept a documented exception, file the parser fix
 as a tracked upstream issue and wait, or explicitly authorize a scoped edit this phase-agent was
 not authorized to make unilaterally).
+
+## Operator ruling and tooling-forced spec.md edit (2026-08-13, same day)
+
+This defect is now filed upstream as **[issue #3394](https://github.com/Priivacy-ai/spec-kitty/issues/3394)**
+(local ledger id `SK-14` in `/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` — that id is
+a workspace-local bookkeeping label only; **#3394** is the citable reference for any committed
+artifact). The operator ruled option (a): rephrase the offending citation rather than wait on the
+upstream fix or grant a bypass.
+
+**Edit made, mechanically, for tooling reasons only** — `spec.md:124` (pre-edit): `` `CharterPackManager.activate`'s
+FR-021 default-pack materialization (`src/charter/pack_manager.py:601-616`, ...) `` → (post-edit):
+`` `CharterPackManager.activate`'s default-pack materialization (`src/charter/pack_manager.py:601-616`, ...) ``.
+Only the bare `FR-021` token was removed; the mechanism name ("default-pack materialization") and
+every `file:line` citation in the sentence (`src/charter/pack_manager.py:601-616`,
+`src/charter/activation_engine.py:257-268`, `src/charter/pack_manager.py:511-518`) are untouched,
+so the sentence's full evidentiary weight is preserved. This is a **semantically inert** edit: the
+sentence's claim, its scope ("not an org-specific gap... the same exclusion would equally apply to
+an unlisted built-in or project artifact"), and its "not a defect this mission changes" framing are
+byte-identical in meaning before and after. Re-read in full post-edit (spec.md:113-135) and confirmed
+it still reads correctly. This was **not** a content revision to the mission's already-reviewed,
+PASSED spec — it exists solely to stop `parse_requirement_ids_from_spec_md`
+(`src/specify_cli/requirement_mapping.py:104-117`) misreading a citation of another, unrelated,
+already-shipped mechanism's requirement id as one of *this* spec's own unmapped FRs. Authorized
+explicitly by the operator; see `reviews/tasks.ruling.md` for the full ruling record. Confirmed by
+direct `grep -oE '\bFR-[0-9]+\b' spec.md | sort -u` post-edit: returns exactly `FR-001 FR-002
+FR-003` — this spec's own three Requirements-table rows, nothing foreign remains. (`C-011`, cited
+once in prose referencing the charter's ATDD-First Discipline directive, was checked and found
+harmless: `parse_requirement_ids_from_spec_md`'s functional-mapping check only fires on `FR-`-prefixed
+ids, never on `C-`-prefixed ones, so it does not reproduce this defect and was left as-is.)
+
+## `finalize-tasks` retry — two more distinct failures, the second is a fresh BLOCKED (2026-08-13, same day)
+
+Re-running `spec-kitty agent mission finalize-tasks --mission org-activation-scan-dirs-01KZY1PT
+--json` after the spec.md edit above surfaced two further failures, each for a **different**
+reason than #3394/SK-14 — per the operator's own instruction ("do not iterate on spec.md a second
+time without a new ruling; a different-reason failure is a fresh BLOCKED report"), neither was
+worked around by touching spec.md again.
+
+**Failure 2 — ownership validation, `create_intent` missing (self-resolved, legitimate tool
+mechanism, not a defect)**:
+
+```json
+{"error": "Ownership validation failed: literal-path owned_files entries match zero files. Fix
+the paths or add them to 'create_intent'.", "ownership_literal_path_errors": ["WP01: owned_files
+path 'tests/charter/test_org_scan_dirs_activation_regression.py' is a literal file path that
+matches zero files in the repository. ... declare it in the WP frontmatter:\n  create_intent:\n
+  - tests/charter/test_org_scan_dirs_activation_regression.py"]}
+```
+
+Correct and expected: FR-002's regression test module does not exist yet — it is created by WP01
+during implementation (Subtask T001), and `create_intent` (`src/specify_cli/status/wp_metadata.py:222`,
+`src/specify_cli/ownership/validation.py:387-446`) is the documented, canonical mechanism for
+declaring a planned-new-file `owned_files` entry. Not covered by the `tasks-outline.md`/
+`tasks-packages.md` command-template schemas read earlier in this phase (worth flagging as a
+template gap, not a defect blocking this mission) — the error message itself named the exact
+remedy. Added `create_intent: [tests/charter/test_org_scan_dirs_activation_regression.py]` to
+`tasks/WP01-*.md` frontmatter (the field `finalize-tasks` itself had already written as `[]`) and
+to `wps.yaml` for consistency. Re-ran; this failure did not recur.
+
+**Failure 3 — protected-`main`-branch commit refusal, reproducing on `HEAD=pr/org-activation-scan-dirs`, survives the documented `--target-branch` escape hatch — a fresh BLOCKED, SK-13-family defect**:
+
+```json
+{"error": "Git commit failed: Refusing to commit planning artifacts to the protected branch
+'main'. Start a non-protected feature branch and commit there: 'spec-kitty mission create
+--start-branch <feature-branch>' (or check out an existing feature branch). Planning artifacts
+must land on a feature branch."}
+```
+
+`git branch --show-current` at the time of both attempts: `pr/org-activation-scan-dirs` — not
+`main`. Confirmed identically on a bare retry AND on `finalize-tasks --target-branch
+pr/org-activation-scan-dirs --json` (the CLI's own documented "FR-012 escape hatch" flag): same
+error, byte-for-byte. The `--target-branch` attempt was not inert, though — it mutated
+`tasks/WP01-*.md`'s `planning_base_branch`/`merge_target_branch`/`branch_strategy` fields from
+`main` to `pr/org-activation-scan-dirs` **before** failing at the commit step, leaving the WP file
+inconsistent with `meta.json`'s `target_branch: "main"` (correct-by-design for this
+`single_branch`-topology mission) even though the command itself reported failure. Reverted those
+three fields back to `main` by hand (correcting a tool-induced side effect back to the value
+`meta.json` and this mission's own header already establish as canonical — not a workaround of
+the underlying refusal).
+
+This is the same failure family already tracked as **SK-13** (`safe-commit`/`spec-commit` demand
+HEAD equal the protected `target_branch` from stale `meta.json` rather than reading live git
+state) — now reproduced a fourth time, and for the first time inside `finalize-tasks` itself
+rather than `specify`/`spec-commit`/`safe-commit`. Unlike SK-13's `safe-commit --to-branch`
+partial escape hatch, `finalize-tasks --target-branch` does **not** work around the refusal — it
+only affects WP-frontmatter branch fields, not where the commit lands. Appended as a
+corroboration to SK-13 in `/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` rather than
+filing a new entry (same root cause, same file family already named there).
+
+**Net effect at this entry**: `finalize-tasks` has generated `tasks.md`, `lanes.json`,
+`acceptance-matrix.json` (scaffold, unfilled — correct, filled at implementation time) and
+already committed a `status.events.jsonl`/`status.json` transition (commit `c42a5a154`) as a side
+effect of an earlier partial run, but has **not** committed the planning-artifact set itself
+(`tasks.md`, `wps.yaml`, `tasks/WP01-*.md`, `lanes.json`, `acceptance-matrix.json`, the edited
+`spec.md`). These sit uncommitted on `pr/org-activation-scan-dirs` pending a fresh operator
+ruling on failure 3 (this entry itself constitutes that report, per the operator's own
+instruction). No further spec.md edits, no manual `safe-commit` bypass of `finalize-tasks`'s own
+commit step, and no `meta.json`/status-event hand-editing were attempted beyond the WP-frontmatter
+correction described above.
