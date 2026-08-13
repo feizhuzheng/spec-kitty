@@ -155,10 +155,13 @@ def _scan_roots(
     ``<doctrine_root>/<kind>/built-in`` into ``packs/built-in/<kind>``
     (relocation mission doctrine-built-in-seam-consolidation-01KYW3TX, WP02),
     which resolves via the shared :func:`~doctrine.pack_paths.built_in_dir`
-    seam below instead. ``org_roots`` preserves the legacy package-shaped root
-    contract where each root contributes ``<root>/<plural>/built-in`` --
-    this nested layout is still live for org packs (unaffected by the
-    built-in relocation). ``layer_roots`` is the modern charter layer map.
+    seam below instead. ``org_roots`` contributes, for each root, the flat
+    ``<root>/<plural>`` layout (``recursive=False``) that every real org
+    pack uses today, matching the live loader's own non-recursive org glob
+    (``DoctrineService._org_dirs`` / ``BaseDoctrineRepository``) -- plus,
+    additively, the legacy package-shaped ``<root>/<plural>/built-in``
+    layout (``recursive=True``) where that also still exists, kept only for
+    backward compatibility. ``layer_roots`` is the modern charter layer map.
     Org roots contribute ``<root>/doctrine/<plural>/org``. Project roots
     contribute ``<root>/doctrine/<singular>`` for live ``.kittify/doctrine``
     overlays.
@@ -200,12 +203,27 @@ def _built_in_scan_dir(kind: ArtifactKind) -> tuple[Path, bool] | None:
 def _org_scan_dirs(
     kind: ArtifactKind, org_roots: list[Path] | None
 ) -> list[tuple[Path, bool]]:
-    """Return ``<root>/<plural>/built-in`` dirs that exist for *org_roots*."""
+    """Return the flat and legacy ``built-in`` org-pack dirs that exist.
+
+    For every configured org root, contributes (in this order) the flat
+    ``<root>/<plural>`` layout (``recursive=False``, matching the live
+    loader's non-recursive org glob -- ``DoctrineService._org_dirs`` /
+    ``BaseDoctrineRepository``) when it exists, then the legacy
+    ``<root>/<plural>/built-in`` layout (``recursive=True``, unchanged)
+    when it separately exists. Neither directory existing is not an error --
+    fewer entries are returned, never a raise. The flat entry is ordered
+    first so :func:`resolve_artifact_urn`'s first-match-wins semantics make
+    the flat file win a same-config-stem collision between the two
+    directories (FR-001's precedence rule).
+    """
     dirs: list[tuple[Path, bool]] = []
     for root in org_roots or []:
-        candidate = root / kind.plural / "built-in"
-        if candidate.is_dir():
-            dirs.append((candidate, True))
+        flat = root / kind.plural
+        if flat.is_dir():
+            dirs.append((flat, False))
+        legacy = flat / "built-in"
+        if legacy.is_dir():
+            dirs.append((legacy, True))
     return dirs
 
 
