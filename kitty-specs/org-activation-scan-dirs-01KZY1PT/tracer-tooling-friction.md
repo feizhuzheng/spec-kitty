@@ -261,3 +261,28 @@ ruling on failure 3 (this entry itself constitutes that report, per the operator
 instruction). No further spec.md edits, no manual `safe-commit` bypass of `finalize-tasks`'s own
 commit step, and no `meta.json`/status-event hand-editing were attempted beyond the WP-frontmatter
 correction described above.
+
+## Operator's second ruling (2026-08-13, same day): proceed — plus a state item this entry missed
+
+The operator verified first-hand that `finalize-tasks`'s VALIDATION/GENERATION work (requirement
+mapping, ownership, dependency validation, lane computation) fully succeeded — only its own
+terminal git-commit step hit the SK-13-family refusal, and the generated artifacts were already
+landed via `safe-commit --to-branch` at commit `d5cbd23ef`. Ruling: treat the refused commit as
+bookkeeping, not a content-validation failure, and proceed to the R1–R6 tasks-phase squad.
+
+**A state divergence this entry did not originally report**: the failed `finalize-tasks
+--target-branch pr/org-activation-scan-dirs` attempt mutated **`lanes.json`** the same way it
+mutated `tasks/WP01-*.md` — `lanes.json`'s own `target_branch` field reads
+`"pr/org-activation-scan-dirs"`, while `meta.json`'s `target_branch` (the canonical value for this
+`single_branch`-topology mission) reads `"main"`. Unlike the WP01 frontmatter case, this was
+**not** hand-corrected — `lanes.json` is a tool-generated lane-metadata file, not something a
+phase agent hand-edits per this mission's own governing instructions ("never hand-edit
+spec-kitty state ... no invented enum values"). Recorded here as a **known state item handed to
+the implement phase**: `lanes.json.target_branch` currently disagrees with `meta.json.target_branch`
+and with `tasks/WP01-*.md`'s (corrected) `planning_base_branch`/`merge_target_branch`, both of
+which read `main`. A future `spec-kitty implement WP01` invocation, or whichever code path
+consumes `lanes.json`'s `target_branch` field, should be checked against this divergence before
+being trusted. Appended as an additional side effect to SK-13's corroboration entry in
+`/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` — the general lesson being that a failed
+`--target-branch` remedy leaves partial mutations across **multiple** generated files (WP
+frontmatter AND `lanes.json`), not just the one first observed.
