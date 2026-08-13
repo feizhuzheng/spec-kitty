@@ -158,9 +158,32 @@ misattributable to #3284/#3283's pre-existing baseline red on `main`.
 5. Register the fixture org root and run the full `charter activate directive
    <org-directive-stem>` round trip for the org directive's **own** config-stem (or the
    equivalent programmatic `plan_activation`/`commit_activation` call) — not a direct
-   `resolve_artifact_urn` call.
-6. Assert the org directive's node is present in the graph returned by
-   `filter_graph_by_activation`.
+   `resolve_artifact_urn` call. Note that `CharterPackManager.activate()`'s own
+   artifact-availability check (`_resolve_org_layer_dir`, `src/charter/pack_manager.py`)
+   is an independent resolution path that already checks the flat `<root>/<plural>`
+   layout first and is unaffected by this mission's `_org_scan_dirs` fix — a successful
+   `charter activate` call by itself proves nothing about step 6 below; step 6's graph
+   assertion is what actually exercises the fix.
+6. Name the mechanism that merges the org pack's `*.graph.yaml` DRG fragment (added in
+   step 4) into the graph `filter_graph_by_activation` operates on: call
+   `charter._drg_helpers.load_validated_graph(repo_root, org_root=<org_root>)` — passing
+   `org_root` **explicitly** — to obtain that merged graph. This is required because
+   `load_validated_graph`'s own `org_root` fallback, `_resolve_org_root`
+   (`src/charter/_drg_helpers.py:39-51`), is a permanent no-op that always returns
+   `None` by design (the charter layer cannot import `specify_cli`'s config
+   resolution); omitting the explicit `org_root` argument silently drops the org DRG
+   node from the merged graph entirely, regardless of whether the `_org_scan_dirs` fix
+   has landed. `action_doctrine_bundle.py:165` is, as of this writing, the only call
+   site anywhere in `src/` that ever passes a non-`None` `org_root=` into
+   `load_validated_graph` — this test must independently wire it. (Alternatively, build
+   the merged graph directly via `doctrine.drg.loader.load_built_in_graph()` +
+   `load_graph_or_dir(org_root)` + `merge_layers(...)`, in the patching style
+   `tests/charter/test_merged_graph_on_live_path.py` already uses to inject a fixture
+   layer via `patch("charter._drg_helpers.load_built_in_graph", ...)` and assert on the
+   merged graph's node URNs — that file exists and demonstrates this pattern for the
+   built-in/project layers; adapt it for the org layer.) Then pass the resulting graph
+   into `filter_graph_by_activation` and assert the org directive's node is present in
+   its output.
 7. Add a second test method covering spec.md Acceptance Scenario 5: activating both the
    org stem and an unrelated built-in stem, in either order, both leave the org node
    present; activating **only** the unrelated built-in stem (never the org stem) does
@@ -266,6 +289,16 @@ changed branch of the ~5 LOC fix.
    *else* is returned may change if a flat dir is also present in that fixture.
 2. Add 5 new test methods:
    - **Flat-only**: only `<root>/<plural>` exists → returns one entry, `recursive=False`.
+     Include, as part of this same case, a direct call to
+     `resolve_artifact_urn(ArtifactKind.DIRECTIVE, <org-directive-stem>,
+     doctrine_root=doctrine_root, org_roots=[org_root])` against a fixture that has
+     **only** the flat `<org_root>/directives/<stem>.directive.yaml` present (no
+     `built-in/` directory anywhere under `org_root`), asserting it returns the org
+     directive's URN and does **not** raise `UnknownArtifactIdError` — this is the
+     proof of spec.md User Story 1 Acceptance Scenario 2 (a flat-only fixture, no
+     legacy directory in play at all), distinct from the "Same-config-stem
+     precedence" case below, which requires both directories present and proves
+     Acceptance Scenario 4.
    - **Legacy-only**: only `<root>/<plural>/built-in` exists → returns one entry,
      `recursive=True` (this is effectively the pre-existing behavior; add as a distinct
      explicit case per spec.md FR-003's enumeration even if it overlaps the existing
@@ -291,7 +324,11 @@ User Story 2's Acceptance Scenarios 1-2 collectively (the extended class is gree
 post-fix, and — combined with T002's captured red run of the FR-002 module — demonstrates
 the red-before/green-after pattern C-004 requires, even though FR-003's own cases are
 authored and run only in the green, post-fix state since they pin the *new* contract, not
-a regression of pre-existing behavior).
+a regression of pre-existing behavior). The "Flat-only" case's embedded direct
+`resolve_artifact_urn` call additionally proves User Story 1's Acceptance Scenario 2
+(flat-only fixture, no-raise); the "Same-config-stem precedence" case proves Acceptance
+Scenario 4 (both directories present) — these are two distinct scenarios and must not be
+conflated.
 
 **Files**: `tests/charter/test_kind_vocabulary_scan_roots.py` (extended, ~120-180 new
 lines across 5 methods).
@@ -423,6 +460,19 @@ diff shape, before opening the PR.
 - **Ordering regression.** If the fix's list-building accidentally puts the legacy entry
   before the flat entry, the same-stem precedence test (T005) will catch it, but be
   deliberate about ordering when writing the fix in T003.
+- **Graph-merge never wired to `org_root`.** `charter._drg_helpers.load_validated_graph`'s
+  `org_root` argument defaults to `_resolve_org_root`, a permanent no-op that always
+  returns `None`; the only call site anywhere in `src/` that ever passes a real
+  `org_root=` is `action_doctrine_bundle.py:165`. If T001 builds the graph passed into
+  `filter_graph_by_activation` without explicitly wiring `org_root=<org_root>` (or the
+  equivalent `merge_layers` construction), the org pack's `*.graph.yaml` DRG node never
+  enters the graph at all — pre-fix **or** post-fix — so the test stays red after the fix
+  lands, for a reason unrelated to `_org_scan_dirs`, and T002's red run would be red for
+  the wrong reason. Mitigated by T001 step 6's explicit naming of the mechanism. Relatedly,
+  `charter activate`'s own artifact-availability check (`pack_manager.py`'s
+  `_resolve_org_layer_dir`) already tolerates the flat layout today via an independent
+  resolution path — a successful `charter activate` call by itself is not evidence that
+  the `_org_scan_dirs` fix under test did anything; only the graph assertion is.
 
 ## Reviewer Guidance
 
