@@ -83,6 +83,43 @@ one new) — see Test Placement Decision below. One work package, one PR.
 
 No charter violation requires justification; Complexity Tracking below is empty by design.
 
+## Related, Not Fixed
+
+"Single canonical authority" above is scoped to what this mission actually touches, not to the
+whole "charter activation subsystem." Live-code verification surfaces two adjacent, still-open
+divergences this mission's C-001 file set does not close — named here so a reader of this plan
+alone knows they remain open, not silently missed:
+
+- **The `layer_roots`/`_layer_scan_dirs` cascade path.** `_layer_scan_dirs`
+  (`src/charter/kind_vocabulary.py:219-228`, via `_layer_candidate_dir`, `:212-217`) resolves an
+  org layer to a **third** directory shape, `<root>/doctrine/<plural>/org` — distinct from both
+  this mission's flat `<root>/<plural>` fix and the legacy `<root>/<plural>/built-in` shape
+  `_org_scan_dirs` already scans. It is reached only via `layer_roots`, never `org_roots`:
+  `charter.drg._resolve_activated_urns_for_kind` (`src/charter/drg.py:333-381`) calls
+  `resolve_artifact_urn` with `org_roots` only (the call at `:374-377`; `org_roots` is built from
+  `pack_context.org_roots` alone at `:397`, never `layer_roots`), while
+  `src/specify_cli/cli/commands/charter/activate.py`'s `_source_urn` (`:87-119`, invoked from the
+  cascade path at `:433,466` whenever `charter activate --cascade` runs) calls
+  `resolve_artifact_urn` with `layer_roots` only, never `org_roots`. This mission's fix corrects
+  the DRG activation-filter path (what `filter_graph_by_activation` uses and what the spec's
+  Acceptance Scenarios test); it does not touch, and does not close, the cascade-warning/DRG-id
+  path's independent `layer_roots`-only resolution of the `<root>/doctrine/<plural>/org` shape.
+- **`CharterPackManager._resolve_org_layer_dir`'s FR-013 precedent.**
+  `src/charter/pack_manager.py:238-253` already reconciles flat vs. legacy for a related seam:
+  its docstring states outright that "FR-013 unifies the charter activation subsystem with
+  runtime... Flat is therefore the canonical, preferred layout. The legacy nested
+  `<pack>/doctrine/<plural>/org/` layout is kept as a fallback." Concretely, it checks the flat
+  `root / kind.plural` directory first and falls back to `root / "doctrine" / kind.plural /
+  "org"` (the same shape `_layer_scan_dirs` builds via `_layer_candidate_dir`) only when flat is
+  absent — a **mutually-exclusive precedence** choice (one directory wins outright). This
+  mission's chosen fix is a *different* reconciliation shape for a *different* flat-vs-legacy
+  pair: it scans **both** the flat `<plural>` and the legacy `<plural>/built-in` directories
+  additively whenever each exists, with flat winning only on a same-stem file collision (FR-001),
+  never dropping the legacy directory's other contents. Both are defensible answers to the
+  charter's "single canonical authority" tension, reached from different call sites, but this
+  plan does not cite FR-013's precedent or reconcile the two shapes — that reconciliation is out
+  of this mission's bounded scope (C-001); it is recorded here, not silently missed.
+
 ## The Seam
 
 This change lands entirely in the charter layer, in one pure function and its tests:
@@ -100,14 +137,34 @@ This change lands entirely in the charter layer, in one pure function and its te
 - **No kernel, no mission-loader.** `src/charter/kind_vocabulary.py` is outside both
   `src/kernel/**` and `src/specify_cli/mission_loader/**` — see Gate Set below for why their
   dedicated 90% coverage jobs are structurally inapplicable, not merely "not run this time."
+- **`resolve_artifact_urn`'s real consumer set is wider than the drg.py path this spec's
+  Acceptance Scenarios exercise, and two of those consumers observe a real behavior change.**
+  `resolve_artifact_urn` (`:253+`) is called from `charter.compiler._resolve_config_activated_ids`
+  (`src/charter/compiler.py:112-149`), threaded `org_roots` by
+  `_resolve_config_activated_roots` (`:187`, `list(pack_context.pack_roots[1:])`) for every
+  activated kind on the `charter synthesize` path, and from
+  `charter.consistency_check`'s config↔graph parity guard (`_check_reference_id_parity`,
+  `:744-748`; `_resolve_graph_kind_parity_stem`, `:815-817`) — both pass real `org_roots` today.
+  `compiler.py`'s call site has **no** `try`/`except`: its own docstring (`:135-140`) states a
+  stem that cannot resolve "raises `UnknownArtifactIdError` ... rather than being silently
+  dropped," so for a flat-layout org pack that activates its own stem, `charter synthesize`
+  **crashes today** — a second, more severe symptom of this same root cause, not merely a silent
+  drop. `consistency_check.py`'s two call sites narrowly catch `UnknownArtifactIdError` and report
+  the stem as unresolved; after the fix, that stem starts resolving cleanly instead of being
+  reported. Neither consumer is on the `filter_graph_by_activation` path FR-002's regression test
+  exercises, and neither is covered by FR-003's `_org_scan_dirs`/`resolve_artifact_urn`
+  unit-level cases. See "Nothing Generated, No Contract Movement" below for what this plan does
+  about that gap.
 
-## Nothing Generated
+## Nothing Generated, No Contract Movement
 
-Explicitly, not silently omitted: this mission regenerates **none** of the following.
+Explicit, not silently omitted or assumed: this mission regenerates none of the following, and
+none of the following contract-shaped surfaces move.
 
 - **Doctrine schema** — `scripts/generate_schemas.py`'s sources are `doctrine.*.models`
   (`:140-545`); nothing in `src/charter/kind_vocabulary.py` is a schema source, so the freshness
-  check (below) passes trivially without any regeneration step being run by this WP.
+  check (below) passes trivially without any regeneration step being run by this WP, and no
+  schema contract moves.
 - **Contextive glossary** — the glossary generator (`scripts/generate_contextive_glossaries.py`)
   reacts to new/changed domain terms, not to a scan-directory bugfix. This mission introduces no
   new glossary term; no `generate_contextive_glossaries.py` regeneration is needed even though
@@ -115,15 +172,30 @@ Explicitly, not silently omitted: this mission regenerates **none** of the follo
 - **Agent-command copies** — no `.kittify/overrides/missions/**/command-templates/*` or any
   agent-facing command doc changes; this is a pure library-code fix with no CLI/command surface
   touched (see The Seam above).
+- **Mission step contracts, action indices, `orchestrator-api`, `spec-kitty-events`** — all
+  untouched; none sit on the call path between `charter activate` arming `activated_directives`
+  and `_org_scan_dirs` finding (or failing to find) an org-pack directory, so none are cited in
+  the spec's Key Entities or Requirements. The defect and its fix remain contained to one
+  resolution helper and its direct callers — **except** for the two additional
+  `resolve_artifact_urn` consumers (`compiler.py`, `consistency_check.py`) named in The Seam
+  above, whose *behavior* (not their contract shape) changes as a side effect of the fix.
 
-## No Contract Movement
-
-Also explicit, also a deliberate non-event: doctrine schemas, mission step contracts, action
-indices, the `orchestrator-api` surface, and the vendored/external `spec-kitty-events` package
-boundary are all untouched by this mission. None of them are cited anywhere in the spec's Key
-Entities or Requirements because none of them sit on the call path between `charter activate`
-arming `activated_directives` and `_org_scan_dirs` finding (or failing to find) an org-pack
-directory — the defect and its fix are fully contained in one resolution helper.
+**Test-coverage decision for those two consumers** (resolving the gap The Seam names, sized
+proportionally to a one-WP, ~5 LOC mission rather than deferred wholesale): the implementing WP
+adds one additional assertion to FR-002's own new test module
+(`tests/charter/test_org_scan_dirs_activation_regression.py`), reusing the same on-disk fixture
+already built for the round-trip test, asserting `charter.compiler._resolve_config_activated_ids`
+no longer raises `UnknownArtifactIdError` for the fixture's flat-layout org stem post-fix — this
+closes the more severe (crash-today) symptom at negligible incremental cost, without adding a
+file to C-001's bounded set (it is the same new module FR-002 already authorizes). Coverage for
+`consistency_check.py`'s parity-guard behavior change is **deliberately deferred**, not added:
+its post-fix effect is a lower-severity shift (an already-reported "unresolved" stem starts
+resolving cleanly, not a crash), asserting it correctly would require driving
+`consistency_check.py`'s own multi-argument internal helpers rather than reusing the FR-002
+fixture as directly, and `test_this_project_charter_pack_is_coherent` does not incidentally cover
+it for this repository (this repo's own `.kittify/config.yaml` has no org pack configured at
+all). This gap is recorded here as a known, lower-priority follow-up rather than silently assumed
+covered.
 
 ## Gate Set
 
@@ -138,7 +210,7 @@ for this specific diff shape (`src/charter/kind_vocabulary.py` + `tests/charter/
 | `ruff check` (repo-wide zero-issue) | Advisory, not blocking | `.github/workflows/ci-quality.yml`'s ruff step runs `continue-on-error: true` and only feeds a PR-comment job (`lint-feedback`) — it does not fail CI. CLAUDE.md's "zero issues" is a house rule this mission still honors (no ruff findings expected on a ~5 LOC pure-function change plus straightforward test additions), but it is not what makes the build red or green. |
 | `mypy --strict` (repo-wide zero-issue) | Advisory, not blocking | Same shape as ruff above — `continue-on-error: true`, PR-comment only. Honored anyway: the fix's new tuple entry is the same `(Path, bool)` type the function already returns, so no new annotation burden. |
 | TID251 banned-API (`ruff check src tests --select TID251`) | Applies, expected clean | Enforced (no `continue-on-error`). Bans raw `hashlib.sha256` and catching `click.exceptions.*` directly (`pyproject.toml`). Neither appears anywhere near a directory-existence check or its tests. |
-| Commitlint | Applies | Repo-wide conventional-commit check on commit messages; the `spec-kitty safe-commit` commit for this plan (and later, the WP's own commits) must carry a conventional-commit-shaped subject. |
+| Commitlint | Applies (advisory, not blocking) | `.github/workflows/ci-quality.yml`'s "[ENFORCED] Run commit message linting" step (`:672-675`) carries `continue-on-error: true`, the same shape as the ruff/mypy rows below; its `has_failures` output feeds only the PR-comment `lint-feedback` job (`:987-990`), and the outcome-check step that turns a `continue-on-error` failure into a real job failure (`:976-985`) names only `bandit` and `pip_audit` — never `commitlint`. This is a house rule (per CLAUDE.md), not a CI-blocking gate: the `spec-kitty safe-commit` commit for this plan (and later, the WP's own commits) still must carry a conventional-commit-shaped subject, but a malformed one would not fail CI. |
 | Markdown lint | No | `kitty-specs/**` is in the ignore list; this plan and the spec it extends are never scanned by the markdown-lint step. |
 | Doctrine schema freshness | Applies, passes trivially | Runs unconditionally in the `lint` job, but its sources are `doctrine.*.models`; nothing in this diff is a schema source, so `generate_schemas.py --check` has nothing new to find stale. |
 | Contextive glossary freshness | Applies (in scope, not triggered) | The check-scope glob includes `src/charter/**`, so touching `kind_vocabulary.py` puts this diff in scope for the check to *run* — but the fix introduces no new domain term, so `generate_contextive_glossaries.py check` passes without any regeneration. |
@@ -185,8 +257,19 @@ as the brake — `_built_in_scan_dir` and `_layer_scan_dirs` are not broken and 
 defect, so touching them would not be a proportional tidy-up of the surface this mission is
 fixing, it would be scope creep into two unrelated functions that happen to share a file. There
 is no campsite-clean work beyond the `_org_scan_dirs` fix itself. This is not re-litigated here
-— it is inherited from the spec as a settled decision — and no other adjacent Sonar/lint debt on
-the touched surface was found that would change that conclusion.
+— it is inherited from the spec as a settled decision.
+
+One piece of adjacent debt *was* found, and it is directly caused by the change rather than a
+neighboring helper: `_scan_roots`'s own docstring (`src/charter/kind_vocabulary.py:158-160`,
+`_org_scan_dirs`'s immediate caller) states, present-tense, that "``org_roots`` preserves the
+legacy package-shaped root contract where each root contributes ``<root>/<plural>/built-in`` --
+this nested layout is still live for org packs." Once FR-001 lands, `org_roots` also
+contributes the flat `<root>/<plural>` layout — this sentence goes stale the moment the fix
+merges, in the very function the plan already touches. Because this is the same file and the
+same caller's docstring (not `_built_in_scan_dir`/`_layer_scan_dirs`, which stay untouched per
+C-003), updating it is not scope creep: **the implementing WP must update this docstring
+sentence** as part of the fix commit, so it accurately describes both the flat and legacy
+entries `org_roots` now contributes.
 
 ## Red-First Discipline (WP Sequencing)
 
@@ -196,12 +279,17 @@ ordering constraint on the mission's single work package, not a separate review-
 
 1. Author the FR-002 activation-filter-level regression test (see Test Placement Decision)
    against the pre-fix `src/charter/kind_vocabulary.py`.
-2. Run it and confirm red — expected failure mode is either a raised
-   `charter.kind_vocabulary.UnknownArtifactIdError` (if the test calls `resolve_artifact_urn`
-   directly as a sub-assertion) or, at the `filter_graph_by_activation` level, the org
-   directive's node being absent from the returned graph (the swallow-on-`UnknownArtifactIdError`
-   path in `charter.drg._resolve_activated_urns_for_kind`, `:379-380`, converts the raise into a
-   silent skip). Record which failure mode was actually observed.
+2. Run it and confirm red — the expected pre-fix failure is, unconditionally, the assertion that
+   the org directive's node is **absent** from `filter_graph_by_activation`'s output graph.
+   FR-002 (spec.md) constrains this test to the full `activate()` → `filter_graph_by_activation()`
+   round trip, never a direct `resolve_artifact_urn()` sub-assertion — and for that round-trip
+   shape, a raised `UnknownArtifactIdError` can never be the observed failure:
+   `_resolve_activated_urns_for_kind` (`src/charter/drg.py:371-381`) calls `resolve_artifact_urn`
+   inside a `try`/`except UnknownArtifactIdError: continue` (`:379-380`) that swallows the
+   exception before it can propagate out of `filter_graph_by_activation`. (A
+   `resolve_artifact_urn`-raises assertion is legitimate, but only for FR-003's unit-level test,
+   which per spec.md Acceptance Scenario 2 calls `resolve_artifact_urn` directly — it is not part
+   of FR-002's own red-first attribution.)
 3. Apply the FR-001 fix to `_org_scan_dirs` (the flat-layout scan entry, ordered first,
    `recursive=False`, alongside the retained legacy `built-in/` entry, `recursive=True`).
 4. Re-run the same FR-002 test unmodified and confirm green.
@@ -249,7 +337,9 @@ commit followed by the fix commit), never a single commit that adds an already-g
   any explicit `pytestmark`. An explicit `pytestmark = pytest.mark.fast` is added anyway, to
   match the visible convention in sibling org-pack fixture files
   (`test_org_activations_resolution.py:37`, `test_org_activations_reach_context.py:35`) rather
-  than relying on the conftest hook silently.
+  than relying on the conftest hook silently. This module also carries the one additional
+  `compiler._resolve_config_activated_ids` assertion described in "Nothing Generated, No
+  Contract Movement" above — same fixture, no additional file.
 
 ## PR Shape
 
@@ -277,6 +367,10 @@ exist in this mission directory, seeded at the specify phase. This planning pass
   recursive-flag parity) were already fully recorded at the specify phase and this plan makes no
   decision beyond executing them. Duplicating that content here would be redundant, not
   additive.
+- Cross-reference: this mission already hit and resolved two tooling defects at the specify
+  phase — the workspace-root ledger's SK-09 (protected-`main` branch refusal) and SK-11 (missing
+  git identity swallowed by `safe-commit`) — see `tracer-tooling-friction.md`'s "Commit blocked" /
+  "Resolution" entries for the full account.
 
 ## Project Structure
 
