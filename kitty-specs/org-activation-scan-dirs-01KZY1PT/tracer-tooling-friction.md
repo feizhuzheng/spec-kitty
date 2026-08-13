@@ -93,3 +93,72 @@ scaffold) with concrete content, per this document's own instructions, satisfies
 the next `spec-kitty next`/status check. No new ledger entry was warranted — this is normal,
 documented `spec-kitty plan` behavior, not a repeat of SK-09/SK-11's branch/identity class of
 blocker (this checkout already had both resolved at the specify phase).
+
+## Tasks phase (2026-08-13)
+
+Mechanics: `spec-kitty agent context resolve --action tasks_outline --mission
+org-activation-scan-dirs-01KZY1PT --json` and the returned `check_prerequisites` command both
+ran cleanly, non-interactively, first try, and confirmed `feature_dir` as expected. Worth
+recording for a successor: `tasks-outline` and `tasks-packages` are **not** literal `spec-kitty`
+CLI subcommands — they are the prompt/mission-step template names
+(`.kittify/overrides/missions/software-dev/command-templates/tasks-outline.md`,
+`tasks-packages.md`) that this phase-agent follows by hand. The actual CLI surface backing this
+phase is `spec-kitty agent context resolve`, `spec-kitty agent mission check-prerequisites`,
+`spec-kitty agent mission finalize-tasks`, and `spec-kitty agent tasks map-requirements` — there
+is no `spec-kitty tasks-outline` or `spec-kitty tasks-packages` command to invoke; `wps.yaml` and
+`tasks/WP01-*.md` were authored directly by hand per the templates' documented schema, then
+handed to `finalize-tasks` for parsing/validation/commit. This is expected, documented shape
+(the templates are prompt scaffolding, not CLI entry points), not a defect.
+
+**Real defect found — `finalize-tasks` requirement-mapping parser scans whole-document prose,
+not just the Requirements table, for `FR-NNN`-shaped substrings.** With `wps.yaml` and
+`tasks/WP01-org-scan-dirs-flat-layout-fix.md` written (one WP, `requirement_refs: [FR-001,
+FR-002, FR-003]`, matching spec.md's Requirements table exactly), `spec-kitty agent mission
+finalize-tasks --mission org-activation-scan-dirs-01KZY1PT --json` failed:
+
+```json
+{"error": "Requirement mapping validation failed", "missing_requirement_refs_wps": [],
+"unknown_requirement_refs": {}, "unmapped_functional_requirements": ["FR-021"],
+"dependencies_parsed": {"WP01": []},
+"requirement_refs_parsed": {"WP01": ["FR-001", "FR-002", "FR-003"]}}
+```
+
+Root cause, traced to `src/specify_cli/requirement_mapping.py:104-117`
+(`parse_requirement_ids_from_spec_md`) via its caller
+`src/specify_cli/cli/commands/agent/mission_finalize.py:342-353`
+(`_read_spec_requirement_ids`) and `:609-663` (`_validate_requirement_mapping`): the parser runs
+`_REF_FIND_PATTERN` (`\b(?:FR|NFR|C)-\d+\b`) over spec.md's **entire raw text**, not scoped to
+the Requirements table rows, and classifies every match starting with `FR-` as a "functional
+requirement this spec defines" that some WP must cover. `spec.md:124` cites, in explanatory
+prose about the failure mechanism (not in the Requirements table), an **unrelated, pre-existing,
+already-implemented mechanism** in a different part of the codebase: "`CharterPackManager.activate`'s
+FR-021 default-pack materialization (`src/charter/pack_manager.py:601-616` ...)". That citation's
+`FR-021` — a foreign requirement ID from different, already-shipped code, not one of *this*
+spec's three Requirements-table rows (FR-001/002/003) — gets swept into `functional_spec_requirement_ids`
+by the whole-document scan and then reported as "unmapped" because, correctly, no WP in this
+mission claims it (WP01 does not implement or touch `pack_manager.py`'s FR-021 mechanism at all).
+
+No CLI escape hatch exists: `spec-kitty agent tasks map-requirements --help` offers `--wp`,
+`--refs`, `--batch`, `--replace`, `--tracker-ref` — no flag to mark a spec.md-cited ID as
+"external/citation-only" or to scope parsing to the Requirements table. Mapping `FR-021` to WP01
+via `map-requirements` was considered and rejected as dishonest (WP01 genuinely does not
+implement FR-021's behavior, and doing so would misrepresent coverage). Hand-editing spec.md to
+remove or reword the citation was also rejected — spec.md is this mission's already-reviewed,
+PASSED, binding contract; a phase-agent authoring tasks has no mandate to edit it to route around
+a downstream tool's false positive. Per this mission's own governing instructions, the correct
+response to a `finalize-tasks` refusal like this is to capture the exact output and report it as
+BLOCKED-worthy tooling friction rather than hand-patch `tasks.md`/WP frontmatter/`meta.json` — so
+this entry is that capture. **Suggested upstream fix** (not implemented here, out of this
+mission's scope — C-001 bounds this mission to `_org_scan_dirs` and its own tests, not
+`requirement_mapping.py`): scope `parse_requirement_ids_from_spec_md`'s functional-ID extraction
+to the `### Functional Requirements` markdown table's `| FR-NNN |` rows specifically, rather than
+`findall`-ing the entire document body, so a spec.md that legitimately cites another mission's
+historical requirement ID as mechanism evidence does not get misread as defining that ID itself.
+
+**Net effect**: `wps.yaml` and `tasks/WP01-org-scan-dirs-flat-layout-fix.md` exist on disk,
+fully authored, matching the plan's single-WP shape exactly, but `finalize-tasks` has not
+committed them — no `tasks.md` has been generated, and no commit landed on `pr/org-activation-scan-dirs`
+for the tasks phase as of this entry. The mission is BLOCKED pending an operator decision on how
+to handle the false-positive `FR-021` match (accept a documented exception, file the parser fix
+as a tracked upstream issue and wait, or explicitly authorize a scoped edit this phase-agent was
+not authorized to make unilaterally).
