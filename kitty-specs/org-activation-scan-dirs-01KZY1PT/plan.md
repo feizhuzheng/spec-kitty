@@ -51,9 +51,11 @@ and its new sibling entry are pure `pathlib` directory checks, portable as-is).
 **Constraints**: The constraints that matter here are the spec's own C-001 through C-005
 (bounded file set, no D1 code, no neighboring-helper refactor, red-first, no new suppressions)
 — see the Gate Set and Campsite-Clean sections below, not a runtime performance constraint.
-**Scale/Scope**: One function (`_org_scan_dirs`), ~5 LOC changed in one file
-(`src/charter/kind_vocabulary.py`), plus test changes in exactly two test files (one extended,
-one new) — see Test Placement Decision below. One work package, one PR.
+**Scale/Scope**: One function's behavior changed (`_org_scan_dirs`), ~5 LOC, in one file
+(`src/charter/kind_vocabulary.py`) — plus a docstring-only update to that function's caller
+(`_scan_roots`, see Campsite-Clean Scope) in the same file — plus test changes in exactly two
+test files (one extended, one new) — see Test Placement Decision below. One work package, one
+PR.
 
 ## Charter Check
 
@@ -277,8 +279,11 @@ open. This plan does **not** do that, deliberately: the spec's own Clarification
 as the brake — `_built_in_scan_dir` and `_layer_scan_dirs` are not broken and are not the cited
 defect, so touching them would not be a proportional tidy-up of the surface this mission is
 fixing, it would be scope creep into two unrelated functions that happen to share a file. There
-is no campsite-clean work beyond the `_org_scan_dirs` fix itself. This is not re-litigated here
-— it is inherited from the spec as a settled decision.
+is no campsite-clean tidy-up of `_built_in_scan_dir` or `_layer_scan_dirs` beyond the
+`_org_scan_dirs` fix itself. This is not re-litigated here — it is inherited from the spec as a
+settled decision. (A distinct, mandatory docstring edit on `_org_scan_dirs`'s own caller
+follows below — not a campsite tidy-up of a neighboring helper, but adjacent debt the fix
+itself causes.)
 
 One piece of adjacent debt *was* found, and it is directly caused by the change rather than a
 neighboring helper: `_scan_roots`'s own docstring (`src/charter/kind_vocabulary.py:158-160`,
@@ -429,9 +434,10 @@ tests/
 ```
 
 **Structure Decision**: Single project (this repository). No new directory, no new package —
-one function edited in place, two test files (one extended, one new) in the directory the
-function's tests already live in. See Test Placement Decision above for the FR-002 module's
-name and the reasoning for a new file over extending an existing one.
+one function's behavior edited in place (`_org_scan_dirs`), plus a docstring update on its
+caller (`_scan_roots`); two test files (one extended, one new) in the directory the function's
+tests already live in. See Test Placement Decision above for the FR-002 module's name and the
+reasoning for a new file over extending an existing one.
 
 ## Complexity Tracking
 
