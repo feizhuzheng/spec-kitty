@@ -111,12 +111,22 @@ no real org pack uses. Three independent sources agree the real layout is **flat
   gate is non-`None` (the config key is present) and non-empty (another artifact was
   activated), the org node fails membership and is excluded.
 
-**Net effect**: activating *any single* built-in or project artifact by stem silently evicts
-**every** org-pack artifact of that kind from the filtered DRG — no error, no warning,
-`charter activate` reports success. With the `activated_*` key absent, the filter is
-default-allow (`_resolve_activated_urns_for_kind` returns `None` when `activated_ids is None`,
-`:359-360`) and the same org artifact survives — which is why this is easy to miss in ad hoc
-testing and guaranteed once a project does the documented thing.
+**Net effect**: activating the org pack's **own** artifact by its own config-stem can never
+succeed — `resolve_artifact_urn` cannot find it via `_org_scan_dirs`, so it can never survive
+`_node_is_activated`'s step-3 filter, no matter what else is or isn't activated alongside it — no
+error, no warning, `charter activate` reports success while quietly failing to do the one thing
+the operator asked for. (Separately, and *not* fixed by this mission: activating some other,
+unrelated built-in or project artifact by stem can also evict an org-pack artifact that was never
+itself explicitly activated — `CharterPackManager.activate`'s FR-021 default-pack materialization
+(`src/charter/pack_manager.py:601-616`) draws from the STATIC shipped `default.yaml`
+(`src/charter/pack_manager.py:511-518`, `src/charter/packs/default.yaml`), which by construction
+can never list a third-party org artifact's ID, so that path evicts the org artifact regardless of
+`_org_scan_dirs`. This mission narrows the org pack's *own* stem to always resolve; it does not
+change that separate, pre-existing default-pack behavior — see Acceptance Scenario 5.) With the
+`activated_*` key absent, the filter is default-allow
+(`_resolve_activated_urns_for_kind` returns `None` when `activated_ids is None`, `:359-360`) and
+the org artifact survives — which is why this is easy to miss in ad hoc testing and guaranteed
+once a project does the documented thing of activating its own org artifact by stem.
 
 ### User Story 1 - A correctly-laid-out org pack survives activation, loudly (Priority: P1)
 
@@ -142,7 +152,7 @@ error surfaced to the operator.
 
 **Independent Test**: build a fixture org pack in the flat layout — including a root-level
 `*.graph.yaml` declaring the org directive as a DRG node (fixture-construction detail per
-FR-002/FR-003; test data only, not a change to `_drg_helpers.py`, consistent with C-002) —
+FR-002; test data only, not a change to `_drg_helpers.py`, consistent with C-002) —
 register it as an org root, call `charter activate directive <org-directive-stem>` for the org
 directive's own config-stem (or the equivalent programmatic `plan_activation`/`commit_activation`
 call), then assert the org pack's own directive URN is present in
@@ -285,8 +295,8 @@ the follow-up check has a fixed target):
 
 ### Functional Requirements
 
-| ID | Title | User Story | Priority | Status |
-| --- | --- | --- | --- | --- |
+| ID | Title | Requirement | User Story | Priority | Status |
+| --- | --- | --- | --- | --- | --- |
 | FR-001 | `_org_scan_dirs` scans both the flat and legacy org layouts | `_org_scan_dirs` (`src/charter/kind_vocabulary.py:200-209`) returns a scan entry for `<root>/<plural>` (flat, `recursive=False`, matching `DoctrineService._org_dirs` / `BaseDoctrineRepository`'s non-recursive org glob) **and**, where it separately exists on disk, `<root>/<plural>/built-in` (`recursive=True`, unchanged from today), for every configured org root, with the flat entry ordered before the legacy entry in the returned list. Neither directory existing is not an error — the function returns fewer entries, never raises. **Precedence rule**: when a same-config-stem artifact file exists under both `<root>/<plural>` and `<root>/<plural>/built-in` for one org root, the flat-layout file wins — `resolve_artifact_urn` (`:253+`) is first-match-wins over `_scan_roots`'s output, so ordering the flat entry first makes this a deliberate, documented choice (flat is the canonical/current layout; legacy is kept only for backward compatibility) rather than an accidental list-order artifact. See Acceptance Scenario 4. | User Story 1 | High | Open |
 | FR-002 | Red-first regression test at the activation-filter level | A new pytest regression test proves an org-pack artifact (flat layout) is present in `filter_graph_by_activation`'s output after `charter activate directive <org-directive-stem>` activates the org artifact's **own** config-stem (the full `activate()` → `filter_graph_by_activation()` round trip, not a direct `resolve_artifact_urn()` call). The fixture must also declare the org directive as a DRG node in a root-level `*.graph.yaml` — test-fixture data only, not a change to `_drg_helpers.py` (C-002) — since `filter_graph_by_activation` only ever operates on nodes already present in the merged graph, and DRG nodes come from `*.graph.yaml` fragments, never synthesized from `*.directive.yaml` files. The test is authored to fail against the pre-fix `_org_scan_dirs` body and to pass against the post-fix body (both runs recorded by the implementing WP). | User Story 2 | High | Open |
 | FR-003 | Existing unit-level `_org_scan_dirs` tests updated for the new contract | `TestOrgScanDirsHelper` in `tests/charter/test_kind_vocabulary_scan_roots.py` (currently `test_none_org_roots_returns_empty_list`, `test_missing_org_built_in_dir_skipped`, `test_existing_org_built_in_dir_returned` — the last of which today pins the **old**, phantom-layout-only behavior) is extended to cover: only the flat dir present, only the legacy `built-in/` dir present, both present (both returned), neither present (empty list), and a same-config-stem file present under both directories asserting `resolve_artifact_urn` returns the flat-layout file's URN (FR-001's precedence rule) — without deleting the pre-existing legacy-shape coverage. This is unit-level coverage of `_org_scan_dirs`/`resolve_artifact_urn`; unlike FR-002's activation-filter-level test, it needs no DRG-graph (`*.graph.yaml`) fixture. | User Story 1 | High | Open |
