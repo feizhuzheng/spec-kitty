@@ -126,10 +126,13 @@ alone knows they remain open, not silently missed:
 This change lands entirely in the charter layer, in one pure function and its tests:
 
 - **Production surface**: `src/charter/kind_vocabulary.py`, function `_org_scan_dirs`
-  (`:200-209`) only. Its caller (`_scan_roots`, `:142-180`) and *its* caller
-  (`resolve_artifact_urn`, `:253+`) are unchanged — they already consume whatever
-  `_org_scan_dirs` returns via the established `(Path, bool)` list contract, so the fix needs
-  no change above or below it in the call chain.
+  (`:200-209`) is the sole *behavioral* edit. Its caller's (`_scan_roots`, `:142-181`) own
+  call-chain logic, and *its* caller's (`resolve_artifact_urn`, `:253+`), are unchanged — both
+  already consume whatever `_org_scan_dirs` returns via the established `(Path, bool)` list
+  contract, so the fix needs no logic change above or below it in the call chain.
+  `_scan_roots`'s docstring is also edited, though: the sentence at `:158-160` describing what
+  `org_roots` contributes goes stale the moment the fix lands, so the implementing WP updates it
+  as part of the fix commit — see Campsite-Clean Scope below for the full rationale.
 - **No CLI surface.** `charter activate` itself (`src/charter/pack_manager.py`) is unchanged;
   the fix is entirely inside the resolution helper it calls transitively. No Typer command,
   option, or JSON output shape changes.
@@ -145,7 +148,7 @@ This change lands entirely in the charter layer, in one pure function and its te
   `_resolve_config_activated_roots` (`:187`, `list(pack_context.pack_roots[1:])`) for every
   activated kind on the `charter synthesize` path, and from
   `charter.consistency_check`'s config↔graph parity guard (`_check_reference_id_parity`,
-  `:744-748`; `_resolve_graph_kind_parity_stem`, `:815-817`) — both pass real `org_roots` today.
+  `:744-748`; `_resolve_graph_kind_parity_stem`, `:815-819`) — both pass real `org_roots` today.
   `compiler.py`'s call site has **no** `try`/`except`: its own docstring (`:135-140`) states a
   stem that cannot resolve "raises `UnknownArtifactIdError` ... rather than being silently
   dropped," so for a flat-layout org pack that activates its own stem, `charter synthesize`
