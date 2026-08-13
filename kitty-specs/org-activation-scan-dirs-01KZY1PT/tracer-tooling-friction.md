@@ -286,3 +286,71 @@ being trusted. Appended as an additional side effect to SK-13's corroboration en
 `/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` — the general lesson being that a failed
 `--target-branch` remedy leaves partial mutations across **multiple** generated files (WP
 frontmatter AND `lanes.json`), not just the one first observed.
+
+## Analyze phase (2026-08-13) — SK-06/#3133 checked directly, not reproduced; one unrelated `DIRTY_WORKTREE` friction
+
+Ran the canonical `/spec-kitty.analyze` cross-artifact pass by hand (spec.md 419 lines, plan.md
+456 lines, tasks.md + `tasks/WP01-org-scan-dirs-flat-layout-fix.md` 514 lines, all read in full)
+against seven detection passes (duplication, ambiguity, underspecification, charter alignment,
+coverage gaps, inconsistency, terminology canon) plus a direct code-citation spot-check of both
+files this mission's spec/plan cite by line number
+(`src/charter/kind_vocabulary.py:200` for `_org_scan_dirs`, `:158` for the `_scan_roots`
+docstring sentence quoted in plan.md's Campsite-Clean Scope) — both citations are live-accurate.
+Zero findings.
+
+**Before persisting, this phase agent's own brief named a live tracked defect (upstream #3133,
+workspace ledger SK-06): `record-analysis` silently writes `verdict: unknown` for a
+carrier that isn't recognized as `analysis-findings/v1`, because
+`parse_structured_findings` (`src/specify_cli/analysis_report.py:345-361`) returns `None` — not a
+raise — whenever `carrier.get("schema") != FINDINGS_SCHEMA_V1`, and the caller
+(`write_analysis_report`, `:409-419`) treats a `None` return as "legacy report, no carrier" and
+downgrades to `verdict: unknown` rather than distinguishing "no carrier at all" from "carrier
+present but wrong shape."** Checked directly rather than assumed present or absent:
+
+1. Read `src/specify_cli/analysis_report.py` in full. `FINDINGS_SCHEMA_V1 = "analysis-findings/v1"`
+   (`:41`); `_FINDING_SEVERITIES = frozenset(SEVERITY_ORDER)` where `SEVERITY_ORDER` (imported
+   from `specify_cli.charter_runtime.lint.findings:12`) is
+   `{"low": 0, "medium": 1, "high": 2, "critical": 3}`.
+2. Read the canonical analyze template, `packs/built-in/missions/mission-steps/software-dev/analyze/prompt.md:125-145`
+   — it instructs `schema: analysis-findings/v1` (`:129`) and severities `low | medium | high |
+   critical` (`:132`, `:141`). Both match the code's expectations byte-for-byte; there is no
+   drift between the doctrine template and the recorder for a carrier authored per the template.
+3. Authored an `analysis-findings/v1` carrier exactly per that template (`schema:
+   analysis-findings/v1`, `findings: []`, `counts` all-zero, `verdict_hint: ready`) and ran
+   `spec-kitty agent mission record-analysis --mission org-activation-scan-dirs-01KZY1PT
+   --input-file <temp> --agent claude --json`.
+4. Result: `{"success": true, ..., "verdict": "ready", "issue_counts": {...all 0}, "findings":
+   []}` — exactly the verdict this pass's zero findings warrant. **SK-06/#3133 did NOT
+   reproduce on this run.**
+
+**Disposition: the verdict reflects the artifacts, not a tooling failure, for this specific
+pass.** SK-06's failure mode requires a carrier whose `schema:` field is absent, malformed, or
+literally different from `analysis-findings/v1` (a stale/legacy-shaped report, or an agent that
+skips the carrier). This pass's carrier matched the schema constant and the canonical template
+exactly, so the code path that returns `None`/`unknown` was never entered. SK-06 remains a real,
+separately-confirmed code defect (`parse_structured_findings` returning `None` instead of raising
+on a *present-but-wrong* carrier is still a silent-success shape worth fixing per the charter's
+"silent success is this repo's dominant failure mode" standing order) — it just was not the cause
+of anything in this analyze pass, and nothing here should be read as "SK-06 is resolved" or as
+this mission's problem to fix (out of `C-001`'s bounded file set; `analysis_report.py` is not
+`src/charter/kind_vocabulary.py` or either of the two owned test files).
+
+**Separate, unrelated `DIRTY_WORKTREE` friction, not a defect.** The first `record-analysis`
+attempt failed: `{"success": false, "error_code": "DIRTY_WORKTREE", "dirty_paths": ["_rnd/"]}`.
+`_rnd/` is an untracked, non-`.gitignore`d directory at the repo root, unrelated to this mission
+(pre-existing scratch material from an earlier phase of workspace activity, not
+`kitty-specs/org-activation-scan-dirs-01KZY1PT/` content and not authored by this phase agent).
+`record-analysis`'s dirty-worktree guard checks the whole working tree, not just the mission
+directory's own paths, so any untracked file anywhere in the checkout blocks it — worth flagging
+as a possible scoping gap (the guard's evident intent is "don't record analysis against an
+uncommitted mission directory," not "the whole repo must be spotless"), but not pursued as a
+ledger entry here since it did not block this mission's own commits and a workaround was
+available without touching git state: `_rnd/` was `mv`'d out to a scratch path (no git operation,
+no deletion, no commit), `record-analysis` was re-run and succeeded, then `_rnd/` was `mv`'d back
+immediately. `git status --short` before and after is identical (`?? _rnd/`, `??
+kitty-specs/org-activation-scan-dirs-01KZY1PT/analysis-report.md` only, once the analysis report
+existed). No content of `_rnd/` was read, cited, or altered.
+
+**Result**: `analysis-report.md` persisted with `verdict: ready`, `issue_counts` all zero,
+`findings: []` — the required exact verdict string, achieved without a fix round (4b was not
+needed; nothing to fix).
