@@ -36,6 +36,35 @@ from doctrine.drg.models import DRGGraph
 from doctrine.drg.validator import assert_valid
 
 
+def _load_org_layer(org_root: Path) -> DRGGraph | None:
+    """Load org-pack DRG content from *org_root* and/or *org_root*/drg/.
+
+    Returns ``None`` when neither location has a recognisable graph file
+    (the "no org DRG layer" case). Guards the FR-001 P0 zeroing: today's
+    unconditional ``load_graph_or_dir(org_root)`` raises ``DRGLoadError``
+    on a directory with no root-level graph, even when a guide-compliant
+    ``drg/*.graph.yaml`` fragment sits alongside it.
+
+    When both a root-level graph and a ``drg/`` fragment are present, they
+    are merged via :func:`merge_layers` (root as ``built_in``, ``drg/`` as
+    ``project`` -- ``drg/`` wins on same-URN node-label conflicts). This is
+    IC-02's territory; IC-01 lands this branch as a plain merge with no
+    dedup, and IC-03 wraps a malformed load on either side in
+    ``OrgDRGFragmentError``.
+    """
+    drg_dir = org_root / "drg"
+    has_root_graph = has_graph_files(org_root)
+    has_drg_layer = has_graph_files(drg_dir)
+
+    if not has_root_graph and not has_drg_layer:
+        return None
+    if not has_drg_layer:
+        return load_graph_or_dir(org_root)
+    if not has_root_graph:
+        return load_graph_or_dir(drg_dir)
+    return merge_layers(load_graph_or_dir(org_root), load_graph_or_dir(drg_dir))
+
+
 def _resolve_org_root(_repo_root: Path) -> Path | None:
     """Return the configured org doctrine snapshot path, or ``None`` if absent.
 
@@ -84,7 +113,7 @@ def load_validated_graph(repo_root: Path, org_root: Path | None = None) -> DRGGr
         org_root = _resolve_org_root(repo_root)
 
     built_in = load_built_in_graph()
-    org = load_graph_or_dir(org_root) if org_root and org_root.exists() else None
+    org = _load_org_layer(org_root) if org_root and org_root.exists() else None
     project_dir = repo_root / ".kittify" / "doctrine"
     project = (
         load_graph_or_dir(project_dir)
