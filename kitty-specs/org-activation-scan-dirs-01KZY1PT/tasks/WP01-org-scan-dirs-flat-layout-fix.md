@@ -175,15 +175,24 @@ misattributable to #3284/#3283's pre-existing baseline red on `main`.
    node from the merged graph entirely, regardless of whether the `_org_scan_dirs` fix
    has landed. `action_doctrine_bundle.py:165` is, as of this writing, the only call
    site anywhere in `src/` that ever passes a non-`None` `org_root=` into
-   `load_validated_graph` — this test must independently wire it. (Alternatively, build
-   the merged graph directly via `doctrine.drg.loader.load_built_in_graph()` +
-   `load_graph_or_dir(org_root)` + `merge_layers(...)`, in the patching style
-   `tests/charter/test_merged_graph_on_live_path.py` already uses to inject a fixture
-   layer via `patch("charter._drg_helpers.load_built_in_graph", ...)` and assert on the
-   merged graph's node URNs — that file exists and demonstrates this pattern for the
-   built-in/project layers; adapt it for the org layer.) Then pass the resulting graph
-   into `filter_graph_by_activation` and assert the org directive's node is present in
-   its output.
+   `load_validated_graph` — this test must independently wire it. Two distinct,
+   self-contained alternatives exist here — do not combine them into one:
+   **(1)** build the merged graph by hand —
+   `doctrine.drg.loader.merge_layers(doctrine.drg.loader.load_built_in_graph(),
+   doctrine.drg.loader.load_graph_or_dir(org_root))` — bypassing `load_validated_graph`
+   entirely, which sidesteps the `org_root` fallback problem by construction (it never
+   calls `_resolve_org_root` at all); this is a hand-reproduction of
+   `load_validated_graph`'s own internal implementation (`src/charter/_drg_helpers.py`),
+   not an instance of any test file's pattern; **OR (2)** call
+   `load_validated_graph(repo_root, org_root=<org_root>)` directly — the primary
+   instruction already given above — while optionally also patching
+   `charter._drg_helpers.load_built_in_graph`, in the style
+   `tests/charter/test_merged_graph_on_live_path.py` uses (that file always calls
+   `load_validated_graph(tmp_path)` itself and only patches `load_built_in_graph` to
+   substitute a fixture built-in layer), and do this only if you also want to substitute
+   a fixture built-in layer in place of the real shipped one. Then pass the resulting
+   graph into `filter_graph_by_activation` and assert the org directive's node is
+   present in its output.
 7. Add a second test method covering spec.md Acceptance Scenario 5: activating both the
    org stem and an unrelated built-in stem, in either order, both leave the org node
    present; activating **only** the unrelated built-in stem (never the org stem) does
@@ -303,7 +312,11 @@ changed branch of the ~5 LOC fix.
      `recursive=True` (this is effectively the pre-existing behavior; add as a distinct
      explicit case per spec.md FR-003's enumeration even if it overlaps the existing
      `test_existing_org_built_in_dir_returned`).
-   - **Both present**: both directories exist → returns both entries, flat first.
+   - **Both present**: both directories exist → returns both entries, flat first — this is
+     the proof of spec.md User Story 1 Acceptance Scenario 3 (artifacts under both the
+     flat directory and the legacy `built-in/` subdirectory are found; the fix is
+     additive, not a replacement that trades one phantom layout for a different single
+     layout).
    - **Neither present**: neither directory exists → returns `[]` (no exception).
    - **Same-config-stem precedence**: a same-stem artifact file exists under both
      `<root>/<plural>/<stem>.directive.yaml` (`id: DIRECTIVE_FLAT`) and
