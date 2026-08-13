@@ -72,3 +72,24 @@ no fallback to plain `git commit` was needed. Commit `8902a7453`. This confirms 
 blockers (SK-09's protected-branch-on-`main` refusal, SK-11's missing identity) were the
 full and only cause; once off `main` and with identity present, `safe_commit` behaves
 exactly as documented.
+
+## Plan phase (2026-08-13)
+
+`spec-kitty plan --mission org-activation-scan-dirs-01KZY1PT --json` ran cleanly on the first
+call, non-interactively, no prompt, no hang. It scaffolded `plan.md` from the software-dev
+command template's own skeleton (Summary / Technical Context / Charter Check / Project
+Structure / Complexity Tracking / Implementation Concern Map) — unlike `spec.md` at the specify
+phase, this scaffold was **not** empty; it carries real section headers and placeholder text, so
+there was no need to fall back to hand-authoring from a separate `plan-template.md` (no such
+file exists for the `software-dev` mission type — confirmed by a direct search of
+`src/doctrine/missions/` — the software-dev command template referenced in the scaffold's own
+`Note` line, `.kittify/overrides/missions/software-dev/command-templates/plan.md`, is the
+canonical source, not a distinct fill-in template). The command's JSON response reported
+`"result": "blocked"` with `blocked_reason` citing "Technical Context ... Language/Version is
+missing or carries only placeholder content" — this is the expected first-pass gate telling the
+caller to replace placeholder text before the mission can advance past planning, not a tooling
+defect. No workaround was needed: filling in the Technical Context section (and the rest of the
+scaffold) with concrete content, per this document's own instructions, satisfies that gate on
+the next `spec-kitty next`/status check. No new ledger entry was warranted — this is normal,
+documented `spec-kitty plan` behavior, not a repeat of SK-09/SK-11's branch/identity class of
+blocker (this checkout already had both resolved at the specify phase).
