@@ -161,14 +161,27 @@ def _scan_roots(
     (``DoctrineService._org_dirs`` / ``BaseDoctrineRepository``) -- plus,
     additively, the legacy package-shaped ``<root>/<plural>/built-in``
     layout (``recursive=True``) where that also separately exists. That
-    legacy shape is accepted here for config-stem *resolution* only; the
-    live loader (``DoctrineService``/``BaseDoctrineRepository``) has never
-    read an org pack's nested ``built-in/`` subdirectory -- its org-layer
-    scan is always the flat, non-recursive glob (``base.py``'s
-    ``_project_scan``, reused for both org and project layers). A
-    config-stem that resolves only via the legacy entry therefore does not
-    guarantee the artifact's *content* loads at runtime through
-    ``DoctrineService``. ``layer_roots`` is the modern charter layer map.
+    legacy shape is accepted here for config-stem *resolution* only, and
+    whether it also loads at runtime is kind-dependent: the live loader's
+    (``DoctrineService``/``BaseDoctrineRepository``) org-layer scan reuses
+    :meth:`doctrine.base.BaseDoctrineRepository._project_scan`, whose
+    *default* is the flat, non-recursive glob (``base.py``'s
+    ``_project_scan``, reused for both org and project layers) -- for most
+    kinds this default is never overridden, so the live loader does not
+    read an org pack's nested ``built-in/`` subdirectory for those kinds.
+    Verified by direct inspection of every ``BaseDoctrineRepository``
+    subclass under ``src/doctrine/``: exactly two override
+    ``_project_scan`` to ``rglob`` instead --
+    :class:`~doctrine.styleguides.repository.StyleguideRepository`
+    (``src/doctrine/styleguides/repository.py:59-61``) and
+    :class:`~doctrine.assets.repository.AssetRepository`
+    (``src/doctrine/assets/repository.py:130-132``) -- so for the
+    ``styleguide`` and ``asset`` kinds specifically, the live loader's
+    org-layer scan *is* recursive and *does* read a nested ``built-in/``
+    subdirectory under an org root. For every other kind, a config-stem
+    that resolves only via the legacy entry does not guarantee the
+    artifact's *content* loads at runtime through ``DoctrineService``.
+    ``layer_roots`` is the modern charter layer map.
     Org roots contribute ``<root>/doctrine/<plural>/org``. Project roots
     contribute ``<root>/doctrine/<singular>`` for live ``.kittify/doctrine``
     overlays.
@@ -218,9 +231,11 @@ def _org_scan_dirs(
     ``BaseDoctrineRepository``) when it exists, then the legacy
     ``<root>/<plural>/built-in`` layout (``recursive=True``, unchanged)
     when it separately exists. Neither directory existing is not an error --
-    fewer entries are returned, never a raise. Note that the live loader
-    (``DoctrineService``/``BaseDoctrineRepository``) has never read the
-    legacy nested shape -- see :func:`_scan_roots`'s docstring.
+    fewer entries are returned, never a raise. Note that whether the live
+    loader (``DoctrineService``/``BaseDoctrineRepository``) also reads this
+    legacy nested shape at runtime is kind-dependent -- see
+    :func:`_scan_roots`'s docstring for which kinds' repositories override
+    the default non-recursive org-layer scan.
 
     **Global flat-before-legacy grouping** (PR-BOUNDARY-002 fix, pre-merge
     adversarial squad, severity 3; operator-ruled "fix it properly" rather

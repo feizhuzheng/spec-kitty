@@ -154,7 +154,12 @@ _KNOWN_JOIN_ALLOWLIST: frozenset[tuple[Path, int]] = frozenset(
         # `flat / "built-in"` join from line 244 to line 254; the join
         # itself is unchanged -- only the accumulator variable name
         # (`legacy_dirs` instead of `dirs`) and the docstring moved.
-        (Path("src/charter/kind_vocabulary.py"), 254),
+        # FRESHENED 2026-08-14 (#3385 fix-agent pass, docstring-overclaim
+        # fix): the `_scan_roots` docstring was further expanded to correct
+        # an overclaim about which repositories' org-layer scans are
+        # non-recursive, pushing the (unchanged) join from line 254 to
+        # line 269; the join itself remains unchanged.
+        (Path("src/charter/kind_vocabulary.py"), 269),
         # src/kernel/paths.py::_MISSION_ASSETS_SIBLING_PATTERN -- a relative
         # SHAPE constant (input to kernel.sibling_paths.resolve_installed_sibling),
         # not a filesystem join against a concrete root. kernel cannot import
