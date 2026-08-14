@@ -198,15 +198,20 @@ class TestOrgScanDirsHelper:
             (legacy, True),
         ]
 
-    def test_neither_dir_present_returns_empty_list(self, tmp_path: Path) -> None:
-        """Neither present: neither directory exists -> ``[]``, no exception.
-
-        Non-discriminating boundary case (identical under the pre-fix and
-        post-fix implementations, since ``is_dir()`` is ``False`` for every
-        candidate either way) -- included for FR-003's explicit enumeration
-        completeness, not as fix-specific regression coverage.
-        """
-        assert _org_scan_dirs(ArtifactKind.TACTIC, [tmp_path / "nonexistent-root"]) == []
+    # PR-TESTS-001 (severity 2, pre-merge adversarial squad): a prior
+    # `test_neither_dir_present_returns_empty_list` case here ("neither
+    # directory exists -> []") was removed as redundant. Verified directly
+    # (function-body-only revert of `_org_scan_dirs` to the pre-mission
+    # single-candidate shape, `uv run pytest
+    # tests/charter/test_kind_vocabulary_scan_roots.py
+    # tests/charter/test_org_scan_dirs_activation_regression.py -q`): 7
+    # failed, 14 passed, and the removed test was not among the 7 failures
+    # -- it stayed green under both the pre-fix and post-fix implementation
+    # bodies (`is_dir()` is `False` for every candidate either way), so it
+    # carried no fix-specific discriminating signal. Its "nothing to scan"
+    # outcome is already covered by `test_none_org_roots_returns_empty_list`
+    # (`org_roots=None`) and `test_missing_org_built_in_dir_skipped`
+    # (`org_roots=[<existing root with no plural subdir>]`) above.
 
     def test_same_config_stem_precedence_flat_wins(self, tmp_path: Path) -> None:
         """FR-001's precedence rule / Acceptance Scenario 4: a same-config-stem
