@@ -511,3 +511,7 @@ diff shape, before opening the PR.
 ```bash
 spec-kitty agent action implement WP01 --agent <name>
 ```
+
+## Activity Log
+
+- 2026-08-13T23:31:59Z – user – Red-first verified empirically: 21 passed -> revert -> 7 failed/14 passed -> restore -> 21 passed; ruff, mypy --strict, TID251 clean
