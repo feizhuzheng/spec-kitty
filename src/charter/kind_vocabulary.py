@@ -222,29 +222,39 @@ def _org_scan_dirs(
     (``DoctrineService``/``BaseDoctrineRepository``) has never read the
     legacy nested shape -- see :func:`_scan_roots`'s docstring.
 
-    The flat entry is ordered first *within each root* so
-    :func:`resolve_artifact_urn`'s first-match-wins semantics make the flat
-    file win a same-config-stem collision between the two directories of
-    one org root (FR-001's precedence rule, spec.md Acceptance Scenario 4,
-    scoped to "for one org root"). This ordering guarantee does **not**
-    extend across multiple org roots: with ``org_roots=[a, b]``, a legacy
-    entry from ``a`` still precedes a flat entry from ``b`` in the returned
-    list, so a same-config-stem collision straddling two different org
-    packs is decided by ``org_roots`` order, not by flat-vs-legacy shape.
-    Reconciling cross-root precedence is a separate, broader question (the
-    same ``org_roots``-order-dependence already exists for any same-stem
-    collision across roots, e.g. two flat-layout packs) and is out of this
-    fix's bounded scope (spec.md C-001).
+    **Global flat-before-legacy grouping** (PR-BOUNDARY-002 fix, pre-merge
+    adversarial squad, severity 3; operator-ruled "fix it properly" rather
+    than merely documenting the gap). FR-001's precedence rule is worded
+    "for one org root" -- this widens it beyond that literal text, a
+    deliberate, operator-authorized scope expansion to close the defect
+    class rather than leave it as a documented limitation: the returned
+    list is grouped as *every flat entry, in org-root order* followed by
+    *every legacy entry, in org-root order* -- entries are **not**
+    interleaved per root as they were before this fix. Previously, with
+    ``org_roots=[a, b]``, a legacy entry from ``a`` could precede a flat
+    entry from ``b`` in the returned list, so a same-config-stem collision
+    straddling two different org packs -- one legacy-shaped, one
+    flat-shaped -- was decided by ``org_roots`` order, not by flat-vs-legacy
+    shape, contradicting the documented flat-wins invariant whenever the
+    legacy-shaped root happened to be listed first.
+    :func:`resolve_artifact_urn`'s first-match-wins semantics over this
+    grouped list now make the flat-layout file win a same-config-stem
+    collision regardless of which org root either file came from, or which
+    order the roots were supplied in -- see
+    ``TestOrgScanDirsHelper.test_multi_root_precedence_flat_wins_regardless_of_root_order``
+    (``tests/charter/test_kind_vocabulary_scan_roots.py``) for the
+    regression, exercised in both root orderings.
     """
-    dirs: list[tuple[Path, bool]] = []
+    flat_dirs: list[tuple[Path, bool]] = []
+    legacy_dirs: list[tuple[Path, bool]] = []
     for root in org_roots or []:
         flat = root / kind.plural
         if flat.is_dir():
-            dirs.append((flat, False))
+            flat_dirs.append((flat, False))
         legacy = flat / "built-in"
         if legacy.is_dir():
-            dirs.append((legacy, True))
-    return dirs
+            legacy_dirs.append((legacy, True))
+    return flat_dirs + legacy_dirs
 
 
 def _layer_candidate_dir(kind: ArtifactKind, layer: str, root: Path) -> Path:

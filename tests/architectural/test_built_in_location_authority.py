@@ -148,7 +148,13 @@ _KNOWN_JOIN_ALLOWLIST: frozenset[tuple[Path, int]] = frozenset(
         # scan the flat, non-built-in org layout ahead of this legacy one),
         # moving it from line 206 to 244; behaviour-preserving for this join
         # itself, same org-tier legacy shape.
-        (Path("src/charter/kind_vocabulary.py"), 244),
+        # FRESHENED 2026-08-14 (#3385 fix-agent pass, PR-BOUNDARY-002): the
+        # `_org_scan_dirs` docstring was expanded to document the new
+        # global flat-before-legacy grouping fix, pushing the (unchanged)
+        # `flat / "built-in"` join from line 244 to line 254; the join
+        # itself is unchanged -- only the accumulator variable name
+        # (`legacy_dirs` instead of `dirs`) and the docstring moved.
+        (Path("src/charter/kind_vocabulary.py"), 254),
         # src/kernel/paths.py::_MISSION_ASSETS_SIBLING_PATTERN -- a relative
         # SHAPE constant (input to kernel.sibling_paths.resolve_installed_sibling),
         # not a filesystem join against a concrete root. kernel cannot import

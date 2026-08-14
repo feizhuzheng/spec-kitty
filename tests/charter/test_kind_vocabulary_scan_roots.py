@@ -237,6 +237,70 @@ class TestOrgScanDirsHelper:
 
         assert urn == "directive:DIRECTIVE_FLAT"
 
+    @pytest.mark.parametrize(
+        "root_order",
+        ["flat_root_first", "legacy_root_first"],
+    )
+    def test_multi_root_precedence_flat_wins_regardless_of_root_order(
+        self, tmp_path: Path, root_order: str
+    ) -> None:
+        """PR-BOUNDARY-002 regression (pre-merge adversarial squad, severity 3).
+
+        FR-001's precedence rule ("flat-layout file wins") is worded *for one
+        org root*. This mission's operator ruled that scope too narrow to ship
+        as-is: with >=2 org roots, ``_org_scan_dirs`` used to append entries
+        per root (``flat_1, legacy_1, flat_2, legacy_2, ...``), so a
+        legacy-shaped root listed *before* a flat-shaped root could still win
+        a same-config-stem collision -- contradicting the documented,
+        tested-at-single-root precedence guarantee. This is a deliberate,
+        operator-authorized widening beyond FR-001's literal text (not
+        something the spec already required): the fix groups all flat entries
+        (in org-root order) before all legacy entries (in org-root order),
+        globally across the whole ``org_roots`` list.
+
+        Two org roots for the *same* colliding config stem: ``legacy_root``
+        has only the legacy ``<root>/<plural>/built-in`` file, ``flat_root``
+        has only the flat ``<root>/<plural>`` file. Exercised in both root
+        orderings so the assertion cannot pass by ordering luck: under the
+        pre-fix interleaved-per-root implementation,
+        ``org_roots=[legacy_root, flat_root]`` returns
+        ``[.../legacy_root/<plural> (empty), .../legacy_root/<plural>/built-in
+        (matches), .../flat_root/<plural> (matches)]`` -- the legacy file's
+        URN is the first match, so it wins. The reverse ordering
+        (``[flat_root, legacy_root]``) happens to already return the correct
+        flat-wins result under the old code (flat is listed first only
+        because its root is listed first), which is exactly the "ordering
+        luck" this parametrization is written to not rely on.
+        """
+        stem = "multi-root-precedence-directive"
+        legacy_root = tmp_path / "legacy-root"
+        flat_root = tmp_path / "flat-root"
+        legacy_dir = legacy_root / ArtifactKind.DIRECTIVE.plural / "built-in"
+        flat_dir = flat_root / ArtifactKind.DIRECTIVE.plural
+        legacy_dir.mkdir(parents=True)
+        flat_dir.mkdir(parents=True)
+        (legacy_dir / f"{stem}.directive.yaml").write_text(
+            "id: DIRECTIVE_LEGACY_A\n", encoding="utf-8"
+        )
+        (flat_dir / f"{stem}.directive.yaml").write_text(
+            "id: DIRECTIVE_FLAT_B\n", encoding="utf-8"
+        )
+        org_roots = (
+            [flat_root, legacy_root]
+            if root_order == "flat_root_first"
+            else [legacy_root, flat_root]
+        )
+        doctrine_root = tmp_path / "doctrine-root-unused"
+
+        urn = resolve_artifact_urn(
+            ArtifactKind.DIRECTIVE,
+            stem,
+            doctrine_root=doctrine_root,
+            org_roots=org_roots,
+        )
+
+        assert urn == "directive:DIRECTIVE_FLAT_B"
+
 
 class TestLayerCandidateDirHelper:
     def test_project_layer_uses_project_kind_dirs_mapping(self, tmp_path: Path) -> None:
