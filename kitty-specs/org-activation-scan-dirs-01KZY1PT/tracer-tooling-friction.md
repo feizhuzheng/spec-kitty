@@ -166,7 +166,7 @@ not authorized to make unilaterally).
 ## Operator ruling and tooling-forced spec.md edit (2026-08-13, same day)
 
 This defect is now filed upstream as **[issue #3394](https://github.com/Priivacy-ai/spec-kitty/issues/3394)**
-(local ledger id `SK-14` in `/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` — that id is
+(local ledger id `SK-14` in the workspace's local tooling-defect ledger — that id is
 a workspace-local bookkeeping label only; **#3394** is the citable reference for any committed
 artifact). The operator ruled option (a): rephrase the offending citation rather than wait on the
 upstream fix or grant a bypass.
@@ -248,7 +248,7 @@ state) — now reproduced a fourth time, and for the first time inside `finalize
 rather than `specify`/`spec-commit`/`safe-commit`. Unlike SK-13's `safe-commit --to-branch`
 partial escape hatch, `finalize-tasks --target-branch` does **not** work around the refusal — it
 only affects WP-frontmatter branch fields, not where the commit lands. Appended as a
-corroboration to SK-13 in `/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` rather than
+corroboration to SK-13 in the workspace's tooling-defect ledger rather than
 filing a new entry (same root cause, same file family already named there).
 
 **Net effect at this entry**: `finalize-tasks` has generated `tasks.md`, `lanes.json`,
@@ -283,7 +283,7 @@ and with `tasks/WP01-*.md`'s (corrected) `planning_base_branch`/`merge_target_br
 which read `main`. A future `spec-kitty implement WP01` invocation, or whichever code path
 consumes `lanes.json`'s `target_branch` field, should be checked against this divergence before
 being trusted. Appended as an additional side effect to SK-13's corroboration entry in
-`/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md` — the general lesson being that a failed
+the workspace's tooling-defect ledger — the general lesson being that a failed
 `--target-branch` remedy leaves partial mutations across **multiple** generated files (WP
 frontmatter AND `lanes.json`), not just the one first observed.
 
@@ -336,20 +336,21 @@ this mission's problem to fix (out of `C-001`'s bounded file set; `analysis_repo
 `src/charter/kind_vocabulary.py` or either of the two owned test files).
 
 **Separate, unrelated `DIRTY_WORKTREE` friction, not a defect.** The first `record-analysis`
-attempt failed: `{"success": false, "error_code": "DIRTY_WORKTREE", "dirty_paths": ["_rnd/"]}`.
-`_rnd/` is an untracked, non-`.gitignore`d directory at the repo root, unrelated to this mission
-(pre-existing scratch material from an earlier phase of workspace activity, not
-`kitty-specs/org-activation-scan-dirs-01KZY1PT/` content and not authored by this phase agent).
-`record-analysis`'s dirty-worktree guard checks the whole working tree, not just the mission
-directory's own paths, so any untracked file anywhere in the checkout blocks it — worth flagging
-as a possible scoping gap (the guard's evident intent is "don't record analysis against an
-uncommitted mission directory," not "the whole repo must be spotless"), but not pursued as a
-ledger entry here since it did not block this mission's own commits and a workaround was
-available without touching git state: `_rnd/` was `mv`'d out to a scratch path (no git operation,
-no deletion, no commit), `record-analysis` was re-run and succeeded, then `_rnd/` was `mv`'d back
-immediately. `git status --short` before and after is identical (`?? _rnd/`, `??
+attempt failed: `{"success": false, "error_code": "DIRTY_WORKTREE", "dirty_paths":
+["<scratch-dir>/"]}`. `<scratch-dir>/` is an untracked, non-`.gitignore`d directory at the repo
+root, unrelated to this mission (pre-existing scratch material from an earlier phase of
+workspace activity, not `kitty-specs/org-activation-scan-dirs-01KZY1PT/` content and not
+authored by this phase agent). `record-analysis`'s dirty-worktree guard checks the whole working
+tree, not just the mission directory's own paths, so any untracked file anywhere in the checkout
+blocks it — worth flagging as a possible scoping gap (the guard's evident intent is "don't
+record analysis against an uncommitted mission directory," not "the whole repo must be
+spotless"), but not pursued as a ledger entry here since it did not block this mission's own
+commits and a workaround was available without touching git state: `<scratch-dir>/` was `mv`'d
+out to a scratch path (no git operation, no deletion, no commit), `record-analysis` was re-run
+and succeeded, then `<scratch-dir>/` was `mv`'d back immediately. `git status --short` before and
+after is identical (`?? <scratch-dir>/`, `??
 kitty-specs/org-activation-scan-dirs-01KZY1PT/analysis-report.md` only, once the analysis report
-existed). No content of `_rnd/` was read, cited, or altered.
+existed). No content of `<scratch-dir>/` was read, cited, or altered.
 
 **Result**: `analysis-report.md` persisted with `verdict: ready`, `issue_counts` all zero,
 `findings: []` — the required exact verdict string, achieved without a fix round (4b was not
@@ -361,9 +362,10 @@ needed; nothing to fix).
 commits (`dcc4f0c57` red-first test, `c88dd78dd` fix, `7ac9b2fa0` docstring correction,
 `d6a297409` architectural-ratchet line-pin refresh) landed via
 `spec-kitty safe-commit <files> -m "..." --to-branch pr/org-activation-scan-dirs` on the first
-try each time, with `_rnd/` left in place untouched — the documented `mv _rnd/` workaround was
-never needed for `safe-commit` itself (only `record-analysis`, per the specify-phase entry
-above, apparently scopes its dirty-worktree guard more broadly than `safe-commit` does). Worth
+try each time, with `<scratch-dir>/` left in place untouched — the documented
+`mv <scratch-dir>/` workaround was never needed for `safe-commit` itself (only
+`record-analysis`, per the specify-phase entry above, apparently scopes its dirty-worktree guard
+more broadly than `safe-commit` does). Worth
 noting as a positive data point: not every command in this mission's CLI surface shares the same
 dirty-worktree guard scope.
 
@@ -417,3 +419,26 @@ process lesson for future single_branch/no-worktree implementers: reasoning from
 own invariant, or a read-only `git show origin/main:<path> | grep -n`, answers "is this
 pre-existing" without any stash/checkout/reset operation that could collide with a concurrently
 running reviewer's own uncommitted state in the same tree.
+
+## Public-repo hygiene: machine-local paths in committed artifacts (2026-08-14)
+
+A reviewer on a sibling mission flagged, and this mission confirmed, that several of this
+mission's committed artifacts carried machine-local absolute paths and a local scratch-directory
+name — not safe to ship in a public PR on the `Priivacy-ai/spec-kitty` repo. Two distinct causes:
+
+1. **`analysis-report.md`'s `input_artifacts:` frontmatter carried absolute paths, CLI-emitted.**
+   `collect_input_artifact_hashes` (`src/specify_cli/analysis_report.py:208-217`) stringifies
+   each input artifact's path absolutely rather than repo-relatively — a real upstream defect,
+   now filed as **[issue #3398](https://github.com/Priivacy-ai/spec-kitty/issues/3398)**. This
+   mission did not regenerate the report via the CLI (that would just re-emit absolute paths);
+   instead the `path:` values were rewritten to their repo-relative form by hand. The `sha256:`
+   values were left untouched — they hash file content, not the path string, so they remain
+   valid and are byte-identical to what `record-analysis` originally wrote.
+2. **The review YAMLs and this tracer file cited a sibling-repo ledger file
+   (`SPEC-KITTY-LEDGER.md`) by absolute path, and this tracer file named a local untracked
+   scratch directory by its literal name.** Both are machine/workspace-local details with no
+   public-repo meaning. Rewritten by hand to generic phrasing (e.g. "the workspace's
+   tooling-defect ledger", `<scratch-dir>/`) that preserves the finding's technical content
+   without shipping the local name — no finding's substance, severity, or verdict was changed.
+
+Cite **#3398** for the root cause of (1) going forward, not any local ledger id.

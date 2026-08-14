@@ -8,16 +8,16 @@ generated_at: '2026-08-13T21:19:09.835769+00:00'
 analyzer_agent: claude
 input_artifacts:
   spec.md:
-    path: /home/jeroennouws/dev/SK-missions/3385/kitty-specs/org-activation-scan-dirs-01KZY1PT/spec.md
+    path: kitty-specs/org-activation-scan-dirs-01KZY1PT/spec.md
     sha256: daba63429645d3c343859b5ca0989424ef273f1f834e86ebb2f5d06c80c1cbcd
   plan.md:
-    path: /home/jeroennouws/dev/SK-missions/3385/kitty-specs/org-activation-scan-dirs-01KZY1PT/plan.md
+    path: kitty-specs/org-activation-scan-dirs-01KZY1PT/plan.md
     sha256: 06f90f485de6296c136aa6a42d17fa88a216288eb94455fcea8a03e60270e26b
   tasks.md:
-    path: /home/jeroennouws/dev/SK-missions/3385/kitty-specs/org-activation-scan-dirs-01KZY1PT/tasks.md
+    path: kitty-specs/org-activation-scan-dirs-01KZY1PT/tasks.md
     sha256: 1e5b9586b5dfc3ee9379eb7cb50acc4134f81ab8e0616aab3ee680424e43aa3c
   charter:
-    path: /home/jeroennouws/dev/SK-missions/3385/.kittify/charter/charter.md
+    path: .kittify/charter/charter.md
     sha256: b2b5046860df95ed513f80cbcf8352fa59e096ec7ec0c9ff88c8c9a391cfa195
 verdict: ready
 issue_counts:

@@ -112,7 +112,7 @@ findings:
     title: "Plan's tracer-friction entry correctly avoids a duplicate ledger entry, but does not cross-link the still-relevant SK-09/SK-11 branch/identity entries already logged for this same mission"
     evidence:
       - artifact: "kitty-specs/org-activation-scan-dirs-01KZY1PT/tracer-tooling-friction.md § Plan phase (2026-08-13)"
-      - artifact: "/home/jeroennouws/dev/SK-missions/SPEC-KITTY-LEDGER.md (SK-09, SK-11)"
+      - artifact: "the workspace's tooling-defect ledger (SK-09, SK-11)"
     claim: >
       This is a minor, non-blocking observation rather than a defect: the plan phase's own
       tracer-friction entry correctly judges that `spec-kitty plan --json`'s "blocked" /
